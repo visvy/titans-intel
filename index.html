@@ -724,13 +724,30 @@ async function openAlliance(aid, rerenderOnly){
     $("main").innerHTML = `<div class="err">Failed to load alliance ${esc(aid)}: ${esc(e.message)}</div>`;
   }
 }
+function pastAlliancesFromSnaps(id, currentAid, max=3){
+  const r = db.players[pkey(id)];
+  if (!r || !r.snaps.length) return [];
+  const periods = alliancePeriods(r.snaps); // newest first
+  const out = [];
+  for (const p of periods){
+    if (String(p.AID) === String(currentAid)) continue;
+    if (p.AID == null || p.AID === -1) continue;
+    if (out.some(x=>String(x.id)===String(p.AID))) continue;
+    out.push({ id:p.AID, name:p.AN });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+const pastCellHtml = list => list.length
+  ? list.map(a=>`<a href="#" onclick="event.preventDefault();event.stopPropagation();openAlliance('${escA(a.id)}')">${esc(a.name||("#"+a.id))}</a>`).join('<span class="muted"> · </span>')
+  : '<span class="muted">—</span>';
 function allianceMembersTable(members, aid, addAllIds){
   // members: unified {id, name, nameKey (for open), rank, level, llevel, might, peaceUntil, E}
   return `<h3 class="sec">Members — click a row to scout</h3>
   <div class="etools">
     <button class="btn small war" id="addAllEnemies">⚔ Add all ${members.length} members to enemy list</button>
   </div>
-  <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th></th></tr>
+  <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th>Past alliances (last 3)</th><th></th></tr>
   ${members.map(m=>{
     const since = sinceInAlliance(m.id, aid);
     const isE = !!enemies()[m.id];
@@ -742,6 +759,7 @@ function allianceMembersTable(members, aid, addAllIds){
     <td class="mono">${fmt(m.might)}</td>
     <td>${peaceBadge(m.peaceUntil, m.banned)}</td>
     <td class="mono muted" data-since="${escA(m.id)}">${since?dshort(since):"just tracked"}</td>
+    <td style="font-size:12px" data-past="${escA(m.id)}">${pastCellHtml(pastAlliancesFromSnaps(m.id, aid))}</td>
     <td><button class="btn small ${isE?"":"war"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
     </tr>`;}).join("")}
   </table>`;
@@ -805,7 +823,7 @@ async function openAllianceT(aid){
       <div class="stat"><div class="k">Banned</div><div class="v war">${lastAllianceMembers.filter(m=>m.banned).length}</div></div>
     </div>
     ${allianceMembersTable(lastAllianceMembers, aid)}
-    <div class="etools"><button class="btn small" id="loadSince">Load real join dates (1 request per member)</button></div>
+    <div class="etools"><button class="btn small" id="loadSince">Load real history (join dates + past alliances — 1 request per member)</button></div>
     <div class="hint" style="margin-top:8px">Peace = tracker's last scrape ("until" on hover). BANNED = protection longer than 63 days, which is how GGE flags banned accounts.</div>`;
   $("reA").onclick = () => openAlliance(aid);
   $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil,m.banned)); toast("All members added"); openAlliance(aid); };
@@ -814,7 +832,7 @@ async function openAllianceT(aid){
     const btn = $("loadSince"); btn.disabled = true;
     let i = 0;
     for (const m of lastAllianceMembers){
-      btn.textContent = `Loading join dates ${++i}/${lastAllianceMembers.length}…`;
+      btn.textContent = `Loading history ${++i}/${lastAllianceMembers.length}…`;
       try {
         const ups = (await tCall(`/updates/players/${m.id}/alliances`)).updates || [];
         ups.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
@@ -822,6 +840,19 @@ async function openAllianceT(aid){
         if (ups.length && String(ups[0].new_alliance_id) === String(aid)) since = Date.parse(ups[0].date);
         const cell = $("main").querySelector(`[data-since="${m.id}"]`);
         if (cell) cell.textContent = since ? dshort(since) : "before tracking";
+        // past alliances: previous alliances from real history, newest first
+        const past = [];
+        for (const u of ups){
+          for (const cand of [ {id:u.new_alliance_id, name:u.new_alliance_name}, {id:u.old_alliance_id, name:u.old_alliance_name} ]){
+            if (cand.id == null) continue;
+            if (String(cand.id) === String(aid)) continue;
+            if (past.some(x=>String(x.id)===String(cand.id))) continue;
+            past.push(cand);
+          }
+          if (past.length >= 3) break;
+        }
+        const pcell = $("main").querySelector(`[data-past="${m.id}"]`);
+        if (pcell) pcell.innerHTML = pastCellHtml(past.slice(0,3));
         if (since){ // persist as a snapshot boundary so it survives
           const r = prec(m.id); r.name = m.name;
           if (!r.snaps.some(s=>String(s.AID)===String(aid) && s.t <= since+1000))
@@ -832,7 +863,7 @@ async function openAllianceT(aid){
       await new Promise(r=>setTimeout(r,300));
     }
     save();
-    btn.textContent = "Join dates loaded ✓";
+    btn.textContent = "History loaded ✓";
   };
   renderWatchlist(); updateEnemyCount();
 }
@@ -920,7 +951,7 @@ $("serverSel").addEventListener("change", () => {
 });
 window.copyText = copyText; window.toggleAttacked = toggleAttacked; window.setNotes = setNotes;
 window.askSpy = askSpy; window.showSpy = showSpy; window.delSpy = delSpy;
-window.removeEnemy = removeEnemy; window.openPlayer = openPlayer; window.addEnemyRow = addEnemyRow;
+window.removeEnemy = removeEnemy; window.openPlayer = openPlayer; window.addEnemyRow = addEnemyRow; window.openAlliance = openAlliance;
 setMode(MODE);
 </script>
 </body>
