@@ -290,6 +290,31 @@ async function tAllianceName(aid){
   try { const a = await tCall("/alliances/id/" + aid); c[aid] = a.alliance_name; return c[aid]; }
   catch(e){ return "#" + aid; }
 }
+/* cached per-player alliance history (tracker mode), 6h TTL */
+async function tPlayerHist(id, force){
+  const r = prec(id);
+  if (!force && r.hist && Date.now() - r.hist.t < 6*3600*1000) return r.hist.ups;
+  const ups = ((await tCall(`/updates/players/${id}/alliances`)).updates || [])
+    .sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
+  r.hist = { t: Date.now(), ups: ups.slice(0, 10) };
+  return ups;
+}
+function sinceFromUps(ups, aid){
+  return (ups.length && String(ups[0].new_alliance_id) === String(aid)) ? Date.parse(ups[0].date) : null;
+}
+function pastFromUps(ups, aid, max=3){
+  const past = [];
+  for (const u of ups){
+    for (const cand of [ {id:u.new_alliance_id, name:u.new_alliance_name}, {id:u.old_alliance_id, name:u.old_alliance_name} ]){
+      if (cand.id == null) continue;
+      if (String(cand.id) === String(aid)) continue;
+      if (past.some(x=>String(x.id)===String(cand.id))) continue;
+      past.push(cand);
+    }
+    if (past.length >= max) break;
+  }
+  return past.slice(0, max);
+}
 
 /* ---------- servers ---------- */
 async function loadServers(){
@@ -653,8 +678,7 @@ async function openPlayerT(nameQ){
 
   // full alliance history with names pre-resolved (same endpoint the official site uses)
   let updates = [];
-  try { updates = (await tCall(`/updates/players/${id}/alliances`)).updates || []; } catch(e){}
-  updates.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)); // newest first
+  try { updates = await tPlayerHist(id, true); } catch(e){}
   // real "in alliance since": newest update whose new_alliance_id == current alliance
   let since = null;
   if (p.alliance_id && updates.length && String(updates[0].new_alliance_id) === String(p.alliance_id)) since = Date.parse(updates[0].date);
@@ -749,7 +773,11 @@ function allianceMembersTable(members, aid, addAllIds){
   </div>
   <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th>Past alliances (last 3)</th><th></th></tr>
   ${members.map(m=>{
-    const since = sinceInAlliance(m.id, aid);
+    const r = db.players[pkey(m.id)];
+    const ups = (MODE==="T" && r?.hist) ? r.hist.ups : null;
+    const since = ups ? sinceFromUps(ups, aid) : sinceInAlliance(m.id, aid);
+    const sinceTxt = since ? dshort(since) : (ups ? "before tracking" : (MODE==="T" ? "…" : "just tracked"));
+    const past = ups ? pastFromUps(ups, aid) : pastAlliancesFromSnaps(m.id, aid);
     const isE = !!enemies()[m.id];
     return `<tr class="click" data-open="${escA(m.nameKey)}">
     <td>${pennant(m.E)}</td>
@@ -758,8 +786,8 @@ function allianceMembersTable(members, aid, addAllIds){
     <td>${m.level??"—"}${m.llevel?"/"+m.llevel:""}</td>
     <td class="mono">${fmt(m.might)}</td>
     <td>${peaceBadge(m.peaceUntil, m.banned)}</td>
-    <td class="mono muted" data-since="${escA(m.id)}">${since?dshort(since):"just tracked"}</td>
-    <td style="font-size:12px" data-past="${escA(m.id)}">${pastCellHtml(pastAlliancesFromSnaps(m.id, aid))}</td>
+    <td class="mono muted" data-since="${escA(m.id)}">${sinceTxt}</td>
+    <td style="font-size:12px" data-past="${escA(m.id)}">${pastCellHtml(past)}</td>
     <td><button class="btn small ${isE?"":"war"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
     </tr>`;}).join("")}
   </table>`;
@@ -823,49 +851,40 @@ async function openAllianceT(aid){
       <div class="stat"><div class="k">Banned</div><div class="v war">${lastAllianceMembers.filter(m=>m.banned).length}</div></div>
     </div>
     ${allianceMembersTable(lastAllianceMembers, aid)}
-    <div class="etools"><button class="btn small" id="loadSince">Load real history (join dates + past alliances — 1 request per member)</button></div>
-    <div class="hint" style="margin-top:8px">Peace = tracker's last scrape ("until" on hover). BANNED = protection longer than 63 days, which is how GGE flags banned accounts.</div>`;
+    <div class="hint" style="margin-top:8px"><span id="histStatus"></span> Peace = tracker's last scrape ("until" on hover). BANNED = protection longer than 63 days, which is how GGE flags banned accounts.</div>`;
   $("reA").onclick = () => openAlliance(aid);
   $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil,m.banned)); toast("All members added"); openAlliance(aid); };
   $("main").querySelectorAll("[data-open]").forEach(r=> r.onclick = ()=> openPlayer(r.dataset.open));
-  $("loadSince").onclick = async () => {
-    const btn = $("loadSince"); btn.disabled = true;
-    let i = 0;
-    for (const m of lastAllianceMembers){
-      btn.textContent = `Loading history ${++i}/${lastAllianceMembers.length}…`;
-      try {
-        const ups = (await tCall(`/updates/players/${m.id}/alliances`)).updates || [];
-        ups.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
-        let since = null;
-        if (ups.length && String(ups[0].new_alliance_id) === String(aid)) since = Date.parse(ups[0].date);
-        const cell = $("main").querySelector(`[data-since="${m.id}"]`);
-        if (cell) cell.textContent = since ? dshort(since) : "before tracking";
-        // past alliances: previous alliances from real history, newest first
-        const past = [];
-        for (const u of ups){
-          for (const cand of [ {id:u.new_alliance_id, name:u.new_alliance_name}, {id:u.old_alliance_id, name:u.old_alliance_name} ]){
-            if (cand.id == null) continue;
-            if (String(cand.id) === String(aid)) continue;
-            if (past.some(x=>String(x.id)===String(cand.id))) continue;
-            past.push(cand);
-          }
-          if (past.length >= 3) break;
-        }
-        const pcell = $("main").querySelector(`[data-past="${m.id}"]`);
-        if (pcell) pcell.innerHTML = pastCellHtml(past.slice(0,3));
-        if (since){ // persist as a snapshot boundary so it survives
-          const r = prec(m.id); r.name = m.name;
-          if (!r.snaps.some(s=>String(s.AID)===String(aid) && s.t <= since+1000))
-            r.snaps.unshift({ t:since, AID:aid, AN:m.allianceName, MP:m.might, L:m.level, LL:m.llevel, PU:null });
-          r.snaps.sort((a,b)=>a.t-b.t);
-        }
-      } catch(e){}
-      await new Promise(r=>setTimeout(r,300));
-    }
-    save();
-    btn.textContent = "History loaded ✓";
-  };
+  autoLoadHistory(aid);
   renderWatchlist(); updateEnemyCount();
+}
+async function autoLoadHistory(aid){
+  const myView = currentView;
+  const status = $("histStatus");
+  const need = lastAllianceMembers.filter(m => { const r = db.players[pkey(m.id)]; return !(r?.hist && Date.now()-r.hist.t < 6*3600*1000); });
+  let i = 0, total = lastAllianceMembers.length;
+  for (const m of lastAllianceMembers){
+    if (currentView !== myView) return; // user navigated away
+    i++;
+    try {
+      const cached = db.players[pkey(m.id)]?.hist && Date.now()-db.players[pkey(m.id)].hist.t < 6*3600*1000;
+      const ups = await tPlayerHist(m.id);
+      const since = sinceFromUps(ups, aid);
+      const cell = $("main").querySelector(`[data-since="${m.id}"]`);
+      if (cell) cell.textContent = since ? dshort(since) : "before tracking";
+      const pcell = $("main").querySelector(`[data-past="${m.id}"]`);
+      if (pcell) pcell.innerHTML = pastCellHtml(pastFromUps(ups, aid));
+      if (since){
+        const r = prec(m.id); r.name = m.name;
+        if (!r.snaps.some(s=>String(s.AID)===String(aid) && s.t <= since+1000))
+          { r.snaps.unshift({ t:since, AID:aid, AN:m.allianceName, MP:m.might, L:m.level, LL:m.llevel, PU:null }); r.snaps.sort((a,b)=>a.t-b.t); }
+      }
+      if (status) status.textContent = i < total ? `Loading member history ${i}/${total}…` : "";
+      if (!cached) await new Promise(r=>setTimeout(r,300)); // throttle only real requests
+    } catch(e){ if (status) status.textContent = `Loading member history ${i}/${total}…`; }
+  }
+  if (status) status.textContent = "";
+  save();
 }
 
 /* ---------- watchlist ---------- */
