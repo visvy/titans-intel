@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GGE Intel — Player &amp; Alliance Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0f1216; --panel:#171c23; --panel2:#1d232c; --line:#2a323d;
+  --parchment:#e8e1d2; --dim:#8a94a3; --gold:#d4a73c; --peace:#5fa96b; --war:#c75548;
+  --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif; --disp:'Cinzel',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--ink);color:var(--parchment);font-family:var(--sans);font-size:14px;line-height:1.45}
+a{color:var(--gold)}
+button{font-family:var(--sans);cursor:pointer}
+::selection{background:var(--gold);color:var(--ink)}
+
+header{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:.08em}
+header h1 span{color:var(--gold)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+select,input[type=text],textarea{background:var(--panel2);border:1px solid var(--line);color:var(--parchment);padding:7px 10px;border-radius:6px;font-family:var(--sans);font-size:13px}
+select:focus,input:focus,textarea:focus{outline:1px solid var(--gold)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}
+.dot.on{background:var(--peace)} .dot.off{background:var(--war)}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--parchment);padding:7px 12px;border-radius:6px;font-size:13px}
+.btn:hover{border-color:var(--gold)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#1a1408;font-weight:600}
+.btn.small{padding:3px 8px;font-size:12px}
+.btn.war{border-color:var(--war);color:var(--war)}
+.btn:disabled{opacity:.5;cursor:default}
+
+.srctabs{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.srctabs button{background:var(--panel);border:0;color:var(--dim);padding:7px 12px;font-size:12px;letter-spacing:.04em}
+.srctabs button.active{background:var(--gold);color:#1a1408;font-weight:600}
+
+.layout{display:grid;grid-template-columns:350px 1fr;min-height:calc(100vh - 55px)}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.sidebar{border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:18px}
+.main{padding:20px 24px;min-width:0}
+
+.searchrow{display:flex;gap:8px}
+.searchrow input{flex:1;min-width:0}
+.hint{color:var(--dim);font-size:12px}
+.seclabel{font-family:var(--disp);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+
+.rowlist{display:flex;flex-direction:column;gap:6px;max-height:32vh;overflow:auto}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--panel);border:1px solid var(--line);border-radius:7px;cursor:pointer}
+.prow:hover{border-color:var(--gold)}
+.prow .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .sub{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .right{margin-left:auto;text-align:right;font-family:var(--mono);font-size:12px;color:var(--gold);white-space:nowrap}
+
+.pennant{width:14px;height:22px;flex:none;clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);border:1px solid rgba(0,0,0,.35)}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.badge.peace{color:var(--peace);border-color:var(--peace)}
+.badge.war{color:var(--war);border-color:var(--war)}
+.badge.gold{color:var(--gold);border-color:var(--gold)}
+
+.copyb{background:none;border:0;color:var(--dim);font-size:13px;padding:2px 4px;border-radius:4px}
+.copyb:hover{color:var(--gold)}
+
+.detail-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.detail-head h2{font-family:var(--disp);font-size:26px;font-weight:700}
+.detail-head .pennant{width:20px;height:32px}
+.idtag{font-family:var(--mono);color:var(--dim);font-size:12px}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stat .k{color:var(--dim);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.stat .v{font-family:var(--mono);font-size:15px;margin-top:3px;word-break:break-word}
+.stat .v.gold{color:var(--gold)} .stat .v.peace{color:var(--peace)} .stat .v.war{color:var(--war)}
+
+h3.sec{font-family:var(--disp);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:22px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);text-align:left;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.07em;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--panel2)}
+tr.done td{opacity:.45}
+.mono{font-family:var(--mono)}
+.muted{color:var(--dim)}
+
+.timeline{display:flex;flex-direction:column}
+.tl-item{display:flex;gap:12px;position:relative;padding:0 0 16px 22px}
+.tl-item::before{content:"";position:absolute;left:6px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.tl-item::after{content:"";position:absolute;left:9px;top:16px;bottom:-2px;width:1px;background:var(--line)}
+.tl-item:last-child::after{display:none}
+.tl-item .when{font-family:var(--mono);font-size:12px;color:var(--dim);min-width:150px}
+.empty{color:var(--dim);padding:18px 4px;font-size:13px}
+.err{color:var(--war);font-size:13px;padding:8px 0}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+.desc{white-space:pre-wrap;font-size:13px;color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;max-height:200px;overflow:auto}
+.footerbar{display:flex;gap:8px;margin-top:auto;flex-wrap:wrap}
+
+.spygrid{display:flex;gap:10px;flex-wrap:wrap}
+.spycard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;width:180px}
+.spycard img{width:100%;border-radius:5px;cursor:zoom-in;display:block}
+.spycard .meta{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;color:var(--dim)}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
+#lightbox img{max-width:95vw;max-height:95vh;border-radius:6px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--gold);color:#1a1408;font-weight:600;padding:8px 16px;border-radius:20px;display:none;z-index:60;font-size:13px}
+.notesbox{width:100%;min-height:34px;resize:vertical;font-size:12px}
+.etools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+input[type=checkbox].big{width:17px;height:17px;accent-color:var(--war);cursor:pointer}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GGE <span>INTEL</span></h1>
+  <div class="srctabs">
+    <button id="tabE">LIVE (empire-api)</button>
+    <button id="tabT">TRACKER (gge-tracker)</button>
+  </div>
+  <div class="hdr-right">
+    <span id="apiDot" class="dot"></span>
+    <input id="apiUrl" type="text" title="API base URL" style="width:190px" />
+    <select id="serverSel" title="Game server"></select>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div>
+      <div class="seclabel">Alliance search</div>
+      <div class="searchrow">
+        <input id="qa" type="text" placeholder="" />
+        <button class="btn primary" id="goAlliance">Find</button>
+      </div>
+      <div class="hint" id="qaHint" style="margin-top:6px"></div>
+      <div id="allianceStatus"></div>
+      <div class="rowlist" id="allianceResults" style="margin-top:10px"></div>
+    </div>
+
+    <div>
+      <div class="seclabel">Player search</div>
+      <div class="searchrow">
+        <input id="q" type="text" placeholder="" />
+        <button class="btn" id="goBtn">Scout</button>
+      </div>
+      <div class="hint" id="qHint" style="margin-top:6px"></div>
+      <div id="searchStatus"></div>
+      <div class="rowlist" id="results" style="margin-top:10px"></div>
+    </div>
+
+    <div>
+      <div class="seclabel">Enemy list</div>
+      <button class="btn war" id="openEnemies" style="width:100%">⚔ Open enemy list (<span id="enemyCount">0</span>)</button>
+    </div>
+
+    <div>
+      <div class="seclabel">Watchlist</div>
+      <div class="rowlist" id="watchlist"></div>
+      <button class="btn small" id="refreshWatch" style="margin-top:8px">Refresh all (record snapshot)</button>
+    </div>
+
+    <div class="footerbar">
+      <button class="btn small" id="exportBtn">Export data</button>
+      <button class="btn small" id="importBtn">Import data</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="empty">
+      Choose a data source (top left), a server, then find an alliance or player.<br><br>
+      <b>LIVE</b> — real-time game data via empire-api (peace countdowns to the minute; history built from your own lookups).<br>
+      <b>TRACKER</b> — gge-tracker's database: real alliance-change history, name-change history, all-time stats; data refreshed periodically by their scraper.
+    </div>
+  </main>
+</div>
+
+<div id="lightbox"><img id="lightboxImg" alt="spy report"></div>
+<div id="toast"></div>
+<input type="file" id="spyFile" accept="image/*" style="display:none">
+
+<script>
+"use strict";
+const LSKEY = "ggeIntel.v3";
+const $ = id => document.getElementById(id);
+const DEF = { E: "https://empire-api.fly.dev", T: "https://api.gge-tracker.com/api/v1" };
+let MODE = localStorage.getItem(LSKEY+".mode") || "T";
+let API  = { E: localStorage.getItem(LSKEY+".apiE") || DEF.E, T: localStorage.getItem(LSKEY+".apiT") || DEF.T };
+
+/* ---------- persistence ---------- */
+let db = { players:{}, enemies:{} };
+// players[srvKey:id] = {name, watch, snaps:[], spy:[{t,img}]}
+// enemies[srvKey][id] = {id, name, alliance, addedAt, attacked, attackedAt, notes, peaceUntil, might}
+try { db = Object.assign({players:{},enemies:{}}, JSON.parse(localStorage.getItem(LSKEY)) || {}); } catch(e){}
+function save(){
+  try { localStorage.setItem(LSKEY, JSON.stringify(db)); }
+  catch(e){ toast("Storage full — delete spy reports or export + clear"); }
+}
+
+/* ---------- helpers ---------- */
+const fmt = n => n==null||n===""? "—" : Number(n).toLocaleString("en-US");
+const hexc = c => "#" + (Number(c)>>>0).toString(16).padStart(6,"0").slice(-6);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const escA = s => esc(s).replace(/'/g,"&#39;");
+function durMs(ms){
+  if (!isFinite(ms) || ms <= 0) return null;
+  const s = ms/1000, d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  return (d? d+"d ":"") + (h? h+"h ":"") + m + "m";
+}
+const dshort = t => new Date(t).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"2-digit"});
+const dfull  = t => new Date(t).toLocaleString(undefined,{dateStyle:"short",timeStyle:"short"});
+const KINGDOMS = {0:"Great Empire",1:"Everwinter Glacier",2:"Burning Sands",3:"Fire Peaks",4:"Storm Islands",10:"Berimond"};
+const CASTLE_TYPES = {1:"Main castle",4:"Outpost",12:"Kingdom castle",3:"Capital",22:"Metropolis",23:"King's tower",25:"Monument",10:"Village"};
+const pennant = E => {
+  const c1 = E ? hexc(E.BGC1) : "#3a4250", c2 = E ? hexc(E.BGC2) : "#565f6e";
+  return `<span class="pennant" style="background:linear-gradient(135deg,${c1} 50%,${c2} 50%)"></span>`;
+};
+const srvKey = () => MODE + ":" + $("serverSel").value;
+const pkey = id => srvKey() + ":" + id;
+const prec = id => db.players[pkey(id)] || (db.players[pkey(id)] = { name:"", watch:false, snaps:[], spy:[] });
+
+let toastT;
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastT); toastT = setTimeout(()=> t.style.display="none", 1800);
+}
+function copyText(s){
+  (navigator.clipboard ? navigator.clipboard.writeText(s) : Promise.reject())
+    .then(()=>toast("Copied: " + s))
+    .catch(()=>{ const i=document.createElement("textarea"); i.value=s; document.body.appendChild(i); i.select(); document.execCommand("copy"); i.remove(); toast("Copied: " + s); });
+}
+const copyBtn = name => `<button class="copyb" title="Copy name" onclick="event.stopPropagation();copyText('${escA(name)}')">📋</button>`;
+
+/* peace helper: unified as absolute timestamp (ms) or null; tracker marks bans as ~76-day "protection" */
+function classifyPeace(dateStr){ // tracker semantics
+  if (!dateStr) return { until:null, banned:false };
+  const t = Date.parse(dateStr);
+  if (!isFinite(t) || t <= Date.now()) return { until:null, banned:false };
+  const banned = (t - Date.now()) > 63*24*3600*1000; // >=63 days => ban, same rule as gge-tracker's UI
+  return { until:t, banned };
+}
+const peaceBadge = (until, banned) => {
+  if (banned) return `<span class="badge war" title="banned until ${dfull(until)}">BANNED</span>`;
+  if (!until || until <= Date.now()) return '<span class="muted">—</span>';
+  return `<span class="badge peace" title="until ${dfull(until)}">${durMs(until - Date.now())}</span>`;
+};
+
+/* ---------- snapshots (both modes) ---------- */
+function snap(id, name, aid, an, mp, lvl, llvl, peaceUntil){
+  const r = prec(id);
+  r.name = name;
+  const last = r.snaps[r.snaps.length-1], now = Date.now();
+  if (last && now - last.t < 60000 && String(last.AID) === String(aid)) { last.t = now; last.MP = mp; last.PU = peaceUntil; }
+  else r.snaps.push({ t:now, AID:aid, AN:an, MP:mp, L:lvl, LL:llvl, PU:peaceUntil });
+  if (r.snaps.length > 500) r.snaps = r.snaps.slice(-500);
+}
+function alliancePeriods(snaps){
+  const out = [];
+  for (const s of snaps){
+    const last = out[out.length-1];
+    if (last && String(last.AID) === String(s.AID)) last.to = s.t;
+    else out.push({ AID:s.AID, AN:s.AN, from:s.t, to:s.t });
+  }
+  return out.reverse();
+}
+function sinceInAlliance(id, aid){
+  const r = db.players[pkey(id)];
+  if (!r || !r.snaps.length) return null;
+  const p = alliancePeriods(r.snaps)[0];
+  return (p && String(p.AID) === String(aid)) ? p.from : null;
+}
+
+/* ---------- API layer ---------- */
+function eCall(cmd, headers){
+  const body = JSON.stringify(headers).slice(1,-1);
+  return fetch(`${API.E}/${$("serverSel").value}/${cmd}/${encodeURIComponent(body)}`)
+    .then(r=>r.json())
+    .then(j=>{ if (j.error) throw new Error(j.error); if (j.return_code !== 0) throw new Error("Game code " + j.return_code); return j.content; });
+}
+function tCall(path){
+  return fetch(API.T + path, { headers: { "gge-server": $("serverSel").value } })
+    .then(r=>r.json())
+    .then(j=>{ if (j && j.error) throw new Error(j.error); return j; });
+}
+const allianceNameCache = {}; // per srvKey: {aid: name}
+async function tAllianceName(aid){
+  const c = allianceNameCache[srvKey()] || (allianceNameCache[srvKey()] = {});
+  if (c[aid]) return c[aid];
+  try { const a = await tCall("/alliances/id/" + aid); c[aid] = a.alliance_name; return c[aid]; }
+  catch(e){ return "#" + aid; }
+}
+
+/* ---------- servers ---------- */
+async function loadServers(){
+  const sel = $("serverSel");
+  sel.innerHTML = "";
+  $("apiDot").className = "dot";
+  try {
+    if (MODE === "E"){
+      const st = await fetch(API.E + "/status").then(r=>r.json());
+      const gge=[], e4k=[];
+      for (const [s,on] of Object.entries(st)){ if(!on) continue; (s.startsWith("Empirefourkingdoms")?e4k:gge).push(s); }
+      const label = s => s.replace("EmpirefourkingdomsExGG","E4K Int ").replace("EmpireEx","GGE Int ").replace(/_/," #").trim() || s;
+      sel.innerHTML = `<optgroup label="Goodgame Empire">${gge.map(s=>`<option value="${s}">${esc(label(s))}</option>`).join("")}</optgroup>`
+                    + `<optgroup label="E4K">${e4k.map(s=>`<option value="${s}">${esc(label(s))}</option>`).join("")}</optgroup>`;
+      if (!gge.length && !e4k.length) throw new Error("API reachable but no game socket is logged in");
+    } else {
+      const list = await tCall("/servers");
+      const gge = list.filter(s=>!s.startsWith("E4K")), e4k = list.filter(s=>s.startsWith("E4K"));
+      sel.innerHTML = `<optgroup label="Goodgame Empire">${gge.map(s=>`<option value="${s}">${esc(s)}</option>`).join("")}</optgroup>`
+                    + `<optgroup label="E4K">${e4k.map(s=>`<option value="${s}">${esc(s)}</option>`).join("")}</optgroup>`;
+    }
+    $("apiDot").className = "dot on";
+    const saved = localStorage.getItem(LSKEY + ".server" + MODE);
+    if (saved && [...sel.options].some(o=>o.value===saved)) sel.value = saved;
+  } catch(e){
+    $("apiDot").className = "dot off";
+    $("main").innerHTML = `<div class="err">Could not reach ${esc(API[MODE])}: ${esc(e.message||"network error")}. Check the URL / your connection / browser extensions (F12 console).</div>`;
+  }
+  renderWatchlist(); updateEnemyCount();
+}
+
+/* ---------- mode switching ---------- */
+function setMode(m){
+  MODE = m;
+  localStorage.setItem(LSKEY + ".mode", m);
+  $("tabE").className = m==="E" ? "active" : "";
+  $("tabT").className = m==="T" ? "active" : "";
+  $("apiUrl").value = API[m];
+  if (m === "E"){
+    $("qa").placeholder = "Alliance ID or any member's name";
+    $("qaHint").textContent = "Live mode can't search alliance names — use the ID or one member's name.";
+    $("q").placeholder = "Player name or ID";
+    $("qHint").textContent = "Name search uses the might ranking (partial names OK).";
+  } else {
+    $("qa").placeholder = "Alliance name (partial OK) or ID";
+    $("qaHint").textContent = "Searches the tracker's alliance database.";
+    $("q").placeholder = "Exact player name";
+    $("qHint").textContent = "Tracker needs the exact name (case-insensitive).";
+  }
+  $("main").innerHTML = `<div class="empty">Source switched. Pick a server and search.</div>`;
+  loadServers();
+}
+$("tabE").onclick = () => setMode("E");
+$("tabT").onclick = () => setMode("T");
+$("apiUrl").addEventListener("change", () => {
+  API[MODE] = $("apiUrl").value.trim().replace(/\/+$/,"") || DEF[MODE];
+  localStorage.setItem(LSKEY + ".api" + MODE, API[MODE]);
+  loadServers();
+});
+
+/* ---------- alliance search ---------- */
+async function findAlliance(){
+  const q = $("qa").value.trim();
+  if (!q) return;
+  if (/^\d+$/.test(q)) return openAlliance(q);
+  $("allianceStatus").innerHTML = `<div class="hint" style="margin-top:8px"><span class="spin"></span> searching…</div>`;
+  $("allianceResults").innerHTML = "";
+  try {
+    let list = [];
+    if (MODE === "E"){
+      const c = await eCall("hgh", { LT:2, SV:q });
+      const seen = new Map();
+      for (const r of (c.L||[])){
+        const o = r[2];
+        if (o && !o.DUM && o.AID > -1 && !seen.has(o.AID)) seen.set(o.AID, { id:o.AID, name:o.AN, sub:"via player " + o.N });
+      }
+      list = [...seen.values()];
+    } else {
+      const ql = q.toLowerCase();
+      // exact first
+      try {
+        const a = await tCall("/alliances/name/" + encodeURIComponent(q));
+        if (a && a.alliance_id) list.push({ id:a.alliance_id, name:a.alliance_name, sub:`${a.player_count} members · ${fmt(a.might_current)} MP` });
+      } catch(e){}
+      // fuzzy: scan top pages by might
+      for (let p=1; p<=8; p++){
+        const r = await tCall(`/alliances?page=${p}&orderBy=might_current&orderType=DESC`);
+        for (const a of (r.alliances||[]))
+          if (String(a.alliance_name).toLowerCase().includes(ql) && !list.some(x=>String(x.id)===String(a.alliance_id)))
+            list.push({ id:a.alliance_id, name:a.alliance_name, sub:`${a.player_count} members · ${fmt(a.might_current)} MP` });
+        if (p >= (r.pagination?.total_pages||1)) break;
+        if (list.length >= 15) break;
+      }
+    }
+    $("allianceStatus").innerHTML = list.length ? "" : `<div class="hint" style="margin-top:8px">Nothing found${MODE==="T"?" in the top alliances — try the exact name or ID":""}.</div>`;
+    $("allianceResults").innerHTML = list.map(a=>`<div class="prow" data-aid="${a.id}">
+      <div style="min-width:0"><div class="nm">${esc(a.name || ("#"+a.id))}</div><div class="sub">${esc(a.sub||"")}</div></div>
+      <div class="right">#${a.id}</div></div>`).join("");
+    $("allianceResults").querySelectorAll("[data-aid]").forEach(r => r.onclick = () => openAlliance(r.dataset.aid));
+  } catch(e){
+    $("allianceStatus").innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- player search ---------- */
+async function doSearch(){
+  const q = $("q").value.trim();
+  if (!q) return;
+  $("searchStatus").innerHTML = `<div class="hint" style="margin-top:8px"><span class="spin"></span> scouting…</div>`;
+  $("results").innerHTML = "";
+  try {
+    if (MODE === "T") { $("searchStatus").innerHTML = ""; return openPlayer(q); }
+    if (/^\d+$/.test(q)) { $("searchStatus").innerHTML = ""; return openPlayer(Number(q)); }
+    const c = await eCall("hgh", { LT:2, SV:q });
+    const rows = (c.L||[]).map(r=>({rank:r[0], o:r[2]})).filter(r=>r.o && !r.o.DUM);
+    const ql = q.toLowerCase();
+    const exact = rows.filter(r=>String(r.o.N).toLowerCase().includes(ql));
+    const show = exact.length ? exact : rows;
+    $("searchStatus").innerHTML = exact.length ? "" : `<div class="hint" style="margin-top:8px">No name match — showing nearby ranking page.</div>`;
+    $("results").innerHTML = show.map(r=>`<div class="prow" data-pid="${r.o.OID}">
+      ${pennant(r.o.E)}
+      <div style="min-width:0"><div class="nm">${esc(r.o.N)}</div>
+      <div class="sub">Lv ${r.o.L}${r.o.LL?"/"+r.o.LL:""}${r.o.AID>-1?" · "+esc(r.o.AN||""):""}</div></div>
+      <div class="right">#${fmt(r.rank)}</div></div>`).join("") || `<div class="empty">Nothing found.</div>`;
+    $("results").querySelectorAll("[data-pid]").forEach(r=> r.onclick = ()=> openPlayer(Number(r.dataset.pid)));
+  } catch(e){
+    $("searchStatus").innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- spy reports ---------- */
+let spyTarget = null;
+$("spyFile").onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f || spyTarget == null) return;
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 1200, sc = Math.min(1, MAX/Math.max(img.width,img.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(img.width*sc); cv.height = Math.round(img.height*sc);
+    cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+    const r = prec(spyTarget);
+    (r.spy || (r.spy=[])).push({ t:Date.now(), img: cv.toDataURL("image/jpeg",0.72) });
+    save(); rerender();
+    toast("Spy report attached");
+  };
+  img.onerror = () => toast("Could not read image");
+  img.src = URL.createObjectURL(f);
+};
+function askSpy(id, name){ spyTarget = id; if (name) prec(id).name = name; $("spyFile").click(); }
+$("lightbox").onclick = () => $("lightbox").style.display = "none";
+function showSpy(id, i){ $("lightboxImg").src = db.players[pkey(id)].spy[i].img; $("lightbox").style.display = "flex"; }
+function delSpy(id, i){ db.players[pkey(id)].spy.splice(i,1); save(); rerender(); }
+
+let currentView = { type:null, id:null };
+function rerender(){
+  if (currentView.type === "player") openPlayer(currentView.id);
+  else if (currentView.type === "alliance") openAlliance(currentView.id, true);
+  else if (currentView.type === "enemies") openEnemies();
+}
+
+/* ---------- enemy list ---------- */
+const enemies = () => db.enemies[srvKey()] || (db.enemies[srvKey()] = {});
+function updateEnemyCount(){ $("enemyCount").textContent = Object.keys(db.enemies[srvKey()]||{}).length; }
+function addEnemy(id, name, alliance, might, peaceUntil, banned){
+  const e = enemies();
+  if (!e[id]) e[id] = { id, name, alliance:alliance||"", addedAt:Date.now(), attacked:false, attackedAt:null, notes:"", peaceUntil:peaceUntil||null, banned:!!banned, might:might||null };
+  else Object.assign(e[id], { name, alliance:alliance||e[id].alliance, might:might??e[id].might, peaceUntil:peaceUntil??e[id].peaceUntil, banned: banned??e[id].banned });
+  save(); updateEnemyCount();
+}
+function removeEnemy(id){ delete enemies()[id]; save(); updateEnemyCount(); openEnemies(); }
+function toggleAttacked(id, on){
+  const en = enemies()[id]; if (!en) return;
+  en.attacked = on; en.attackedAt = on ? Date.now() : null;
+  save(); openEnemies();
+}
+function setNotes(id, v){ const en = enemies()[id]; if (en){ en.notes = v; save(); } }
+let enemyFilter = "all";
+function openEnemies(){
+  currentView = { type:"enemies", id:null };
+  const list = Object.values(enemies()).sort((a,b)=> a.attacked - b.attacked || (b.might||0)-(a.might||0));
+  const shown = list.filter(e => enemyFilter==="all" || (enemyFilter==="open" && !e.attacked) || (enemyFilter==="peace" && e.peaceUntil > Date.now()));
+  const done = list.filter(e=>e.attacked).length;
+  $("main").innerHTML = `
+    <div class="detail-head">
+      <h2>⚔ Enemy list</h2>
+      <span class="idtag">${$("serverSel").value} · ${list.length} targets · ${done} attacked</span>
+    </div>
+    <div class="etools">
+      <select id="efilter">
+        <option value="all"${enemyFilter==="all"?" selected":""}>All</option>
+        <option value="open"${enemyFilter==="open"?" selected":""}>Not attacked yet</option>
+        <option value="peace"${enemyFilter==="peace"?" selected":""}>In peace mode</option>
+      </select>
+      <button class="btn small" id="eRefresh">Refresh statuses</button>
+      <button class="btn small" id="eCsv">Export CSV</button>
+      <button class="btn small" id="eCopyAll">Copy all names</button>
+      <button class="btn small" id="eResetAtt">Reset attacked ✓</button>
+      <button class="btn small war" id="eClear">Clear list</button>
+    </div>
+    ${shown.length ? `<table>
+      <tr><th>✓</th><th>Name</th><th>Alliance</th><th>Might</th><th>Peace</th><th style="width:26%">Notes</th><th>Spy</th><th></th></tr>
+      ${shown.map(e=>{
+        const spies = (db.players[pkey(e.id)]?.spy || []).length;
+        return `<tr class="${e.attacked?"done":""}">
+        <td><input type="checkbox" class="big" ${e.attacked?"checked":""} title="${e.attackedAt?("attacked "+dfull(e.attackedAt)):"mark attacked"}" onchange="toggleAttacked('${escA(e.id)}',this.checked)"></td>
+        <td><a href="#" onclick="event.preventDefault();openPlayer('${escA(MODE==="E"?e.id:e.name)}')">${esc(e.name)}</a> ${copyBtn(e.name)}</td>
+        <td class="muted">${esc(e.alliance||"—")}</td>
+        <td class="mono">${fmt(e.might)}</td>
+        <td>${peaceBadge(e.peaceUntil, e.banned)}</td>
+        <td><textarea class="notesbox" placeholder="notes…" onchange="setNotes('${escA(e.id)}',this.value)">${esc(e.notes)}</textarea></td>
+        <td><button class="btn small" onclick="askSpy('${escA(e.id)}','${escA(e.name)}')">📷${spies?" "+spies:""}</button>
+            ${spies?`<button class="btn small" onclick="showSpy('${escA(e.id)}',${spies-1})">👁</button>`:""}</td>
+        <td><button class="btn small" onclick="removeEnemy('${escA(e.id)}')">✕</button></td>
+      </tr>`;}).join("")}
+    </table>` : `<div class="empty">No targets${enemyFilter!=="all"?" matching the filter":""}. Open an alliance and add members, or add players from their profile.</div>`}
+    <div class="hint" style="margin-top:8px">Check ✓ once you've attacked a target (hover shows when). Peace status is from the last refresh.</div>`;
+  $("efilter").onchange = e => { enemyFilter = e.target.value; openEnemies(); };
+  $("eCsv").onclick = exportEnemiesCsv;
+  $("eCopyAll").onclick = () => copyText(list.map(e=>e.name).join("\n"));
+  $("eResetAtt").onclick = () => { for (const e of list){ e.attacked=false; e.attackedAt=null; } save(); openEnemies(); };
+  $("eClear").onclick = () => { if (confirm("Remove ALL targets on this server?")){ db.enemies[srvKey()] = {}; save(); updateEnemyCount(); openEnemies(); } };
+  $("eRefresh").onclick = refreshEnemies;
+}
+async function refreshEnemies(){
+  const list = Object.values(enemies());
+  const btn = $("eRefresh"); btn.disabled = true;
+  let i = 0;
+  for (const e of list){
+    btn.textContent = `Refreshing ${++i}/${list.length}…`;
+    try {
+      if (MODE === "E"){
+        const o = (await eCall("gdi",{PID:Number(e.id)})).O;
+        e.name = o.N; e.alliance = o.AN||""; e.might = o.MP;
+        e.peaceUntil = o.RPT>0 ? Date.now()+o.RPT*1000 : null;
+        snap(o.OID,o.N,o.AID,o.AN,o.MP,o.L,o.LL,e.peaceUntil);
+      } else {
+        const p = await tCall("/players/" + encodeURIComponent(e.name));
+        e.might = Number(p.might_current);
+        const pc = classifyPeace(p.peace_disabled_at);
+        e.peaceUntil = pc.banned ? pc.until : pc.until;
+        e.banned = pc.banned;
+        e.alliance = p.alliance_name || "";
+        e.name = p.player_name;
+      }
+    } catch(err){}
+    await new Promise(r=>setTimeout(r,350));
+  }
+  save(); openEnemies();
+}
+function exportEnemiesCsv(){
+  const list = Object.values(enemies());
+  const q = v => `"${String(v??"").replace(/"/g,'""')}"`;
+  const rows = [["name","player_id","alliance","might","peace_until","banned","attacked","attacked_at","notes","added_at"].join(",")];
+  for (const e of list)
+    rows.push([q(e.name),q(e.id),q(e.alliance),e.might??"",e.peaceUntil?new Date(e.peaceUntil).toISOString():"",e.banned?1:0,e.attacked?1:0,e.attackedAt?new Date(e.attackedAt).toISOString():"",q(e.notes),new Date(e.addedAt).toISOString()].join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\uFEFF"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}));
+  a.download = `enemies_${$("serverSel").value}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+/* ---------- player detail ---------- */
+async function openPlayer(idOrName){
+  currentView = { type:"player", id:idOrName };
+  $("main").innerHTML = `<div class="empty"><span class="spin"></span> Fetching ${esc(idOrName)}…</div>`;
+  try {
+    if (MODE === "E") await openPlayerE(Number(idOrName));
+    else await openPlayerT(String(idOrName));
+  } catch(e){
+    $("main").innerHTML = `<div class="err">Failed: ${esc(e.message)}</div>`;
+  }
+}
+
+function playerHead(id, name, extra){
+  const r = db.players[pkey(id)];
+  const isEnemy = !!enemies()[id];
+  return `<div class="detail-head">
+    ${extra.pennant||""}
+    <h2>${esc(name)}</h2> ${copyBtn(name)}
+    <span class="idtag">ID ${esc(id)}</span>
+    ${extra.badges||""}
+    <button class="btn small" id="watchBtn">${r&&r.watch ? "★ Watching" : "☆ Watch"}</button>
+    <button class="btn small ${isEnemy?"":"war"}" id="enemyBtn">${isEnemy ? "⚔ On enemy list" : "⚔ Add to enemies"}</button>
+    <button class="btn small" id="spyBtn">📷 Add spy report</button>
+    <button class="btn small" id="reBtn">Refresh</button>
+  </div>`;
+}
+function bindPlayerHead(id, name, alliance, might, peaceUntil){
+  const r = prec(id); r.name = name;
+  $("watchBtn").onclick = () => { r.watch = !r.watch; save(); renderWatchlist(); $("watchBtn").textContent = r.watch ? "★ Watching" : "☆ Watch"; };
+  $("enemyBtn").onclick = () => {
+    if (enemies()[id]) { removeEnemy(id); currentView={type:"player",id: MODE==="E"?id:name}; openPlayer(MODE==="E"?id:name); }
+    else { addEnemy(id, name, alliance, might, peaceUntil); toast("Added to enemy list"); $("enemyBtn").textContent = "⚔ On enemy list"; $("enemyBtn").classList.remove("war"); }
+  };
+  $("spyBtn").onclick = () => askSpy(id, name);
+  $("reBtn").onclick = () => openPlayer(MODE==="E" ? id : name);
+}
+function spySection(id){
+  const spies = (db.players[pkey(id)]?.spy)||[];
+  return `<h3 class="sec">Spy reports (${spies.length})</h3>
+  ${spies.length ? `<div class="spygrid">${spies.map((s,i)=>`
+    <div class="spycard"><img src="${s.img}" onclick="showSpy('${escA(id)}',${i})" alt="spy report">
+    <div class="meta"><span>${dfull(s.t)}</span><button class="btn small" onclick="delSpy('${escA(id)}',${i})">✕</button></div></div>`).join("")}</div>`
+    : `<div class="empty">No spy reports attached.</div>`}`;
+}
+
+async function openPlayerE(pid){
+  const c = await eCall("gdi", { PID: pid });
+  const o = c.O;
+  const peaceUntil = o.RPT>0 ? Date.now()+o.RPT*1000 : null;
+  snap(o.OID, o.N, o.AID, o.AN, o.MP, o.L, o.LL, peaceUntil); save();
+  const r = db.players[pkey(o.OID)];
+  const noob = o.RNP>0 ? durMs(o.RNP*1000) : null, relo = o.RRD>0 ? durMs(o.RRD*1000) : null;
+  const since = o.AID>-1 ? sinceInAlliance(o.OID, o.AID) : null;
+  let castles = [];
+  if (c.gcl?.C) for (const k of c.gcl.C) for (const a of (k.AI||[])){ const ai=a.AI||a; castles.push({KID:k.KID,type:ai[0],x:ai[1],y:ai[2],name:ai[10]}); }
+  else if (o.AP) castles = o.AP.map(a=>({KID:a[0],type:a[4],x:a[2],y:a[3],name:""}));
+  const villages = (o.VP||[]).map(v=>({KID:v[0],x:v[2],y:v[3]}));
+  const periods = alliancePeriods(r.snaps);
+
+  $("main").innerHTML = playerHead(o.OID, o.N, {
+    pennant: pennant(o.E),
+    badges: (o.R?'<span class="badge war">RUIN</span>':'') + (o.SA?'<span class="badge gold">searching for alliance</span>':'')
+  }) + `
+    <div>${o.AID>-1
+      ? `Alliance: <a href="#" id="alink">${esc(o.AN||("#"+o.AID))}</a> <span class="muted">(rank ${o.AR})</span>${since?` <span class="badge">since ${dshort(since)} (first seen)</span>`:""}`
+      : `<span class="muted">No alliance</span>`}</div>
+    <div class="statgrid">
+      <div class="stat"><div class="k">Might</div><div class="v gold">${fmt(o.MP)}</div></div>
+      <div class="stat"><div class="k">Level</div><div class="v">${o.L}${o.LL?" / "+o.LL:""}</div></div>
+      <div class="stat"><div class="k">Honor</div><div class="v ${o.H<0?"war":""}">${fmt(o.H)}</div></div>
+      <div class="stat"><div class="k">Glory</div><div class="v">${fmt(o.CF)}</div></div>
+      <div class="stat"><div class="k">Peace mode</div><div class="v ${peaceUntil?"peace":"war"}">${peaceUntil?durMs(peaceUntil-Date.now())+" left":"No"}</div></div>
+      <div class="stat"><div class="k">Noob protection</div><div class="v ${noob?"peace":""}">${noob?noob+" left":"No"}</div></div>
+      <div class="stat"><div class="k">Relocation CD</div><div class="v">${relo||"—"}</div></div>
+    </div>
+    ${spySection(o.OID)}
+    <h3 class="sec">Alliance history <span class="muted" style="text-transform:none;letter-spacing:0">(${r.snaps.length} snapshots · built from your lookups)</span></h3>
+    ${periods.length?`<div class="timeline">${periods.map(p=>`<div class="tl-item">
+      <div class="when">${dfull(p.from)}${p.to!==p.from?" → "+dfull(p.to):""}</div>
+      <div>${p.AID>-1?`<a href="#" class="palink" data-aid="${p.AID}">${esc(p.AN||("#"+p.AID))}</a>`:'<span class="muted">No alliance</span>'}</div></div>`).join("")}</div>`
+      :`<div class="empty">No history yet.</div>`}
+    <h3 class="sec">Castles (${castles.length})</h3>
+    <table><tr><th>Name</th><th>Type</th><th>Kingdom</th><th>Coords</th></tr>
+    ${castles.map(cs=>`<tr><td>${esc(cs.name)||"—"}</td><td>${CASTLE_TYPES[cs.type]||"Type "+cs.type}</td><td>${KINGDOMS[cs.KID]||"KID "+cs.KID}</td><td class="mono">${cs.x}:${cs.y} <button class="copyb" onclick="copyText('${cs.x}:${cs.y}')">📋</button></td></tr>`).join("")}</table>
+    ${villages.length?`<h3 class="sec">Villages (${villages.length})</h3><table><tr><th>Kingdom</th><th>Coords</th></tr>
+    ${villages.map(v=>`<tr><td>${KINGDOMS[v.KID]||"KID "+v.KID}</td><td class="mono">${v.x}:${v.y}</td></tr>`).join("")}</table>`:""}`;
+  bindPlayerHead(o.OID, o.N, o.AN, o.MP, peaceUntil);
+  if ($("alink")) $("alink").onclick = e=>{ e.preventDefault(); openAlliance(o.AID); };
+  document.querySelectorAll(".palink").forEach(a=> a.onclick = e=>{ e.preventDefault(); openAlliance(a.dataset.aid); });
+  renderWatchlist();
+}
+
+async function openPlayerT(nameQ){
+  const p = await tCall("/players/" + encodeURIComponent(nameQ));
+  const id = p.player_id, name = p.player_name;
+  const pc = classifyPeace(p.peace_disabled_at);
+  snap(id, name, p.alliance_id, p.alliance_name, p.might_current, p.level, p.legendary_level, pc.banned?null:pc.until); save();
+
+  // full alliance history with names pre-resolved (same endpoint the official site uses)
+  let updates = [];
+  try { updates = (await tCall(`/updates/players/${id}/alliances`)).updates || []; } catch(e){}
+  updates.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date)); // newest first
+  // real "in alliance since": newest update whose new_alliance_id == current alliance
+  let since = null;
+  if (p.alliance_id && updates.length && String(updates[0].new_alliance_id) === String(p.alliance_id)) since = Date.parse(updates[0].date);
+
+  let nameHist = [];
+  try { nameHist = (await tCall(`/updates/players/${id}/names`)).updates || []; } catch(e){}
+  let castles = [];
+  try { const cs = await tCall("/castle/search/" + encodeURIComponent(name)); if (Array.isArray(cs)) castles = cs; } catch(e){}
+
+  const aLink = (aid, label) => aid==null ? '<span class="muted">no alliance</span>' : `<a href="#" class="palink" data-aid="${aid}">${esc(label||("#"+aid))}</a>`;
+  const durBetween = (a,b) => durMs(Math.abs(Date.parse(b)-Date.parse(a))) || "<1m";
+  const oldest = updates[updates.length-1];
+
+  $("main").innerHTML = playerHead(id, name, { pennant:"", badges: pc.banned?'<span class="badge war">BANNED</span>':"" }) + `
+    <div>${p.alliance_id
+      ? `Alliance: <a href="#" id="alink">${esc(p.alliance_name)}</a> <span class="muted">(rank ${p.alliance_rank})</span>${since?` <span class="badge">member since ${dshort(since)}</span>`:` <span class="badge" title="joined before the tracker started recording">member since before tracking</span>`}`
+      : `<span class="muted">No alliance</span>`}
+      <span class="muted"> · tracker data from ${dfull(Date.parse(p.updated_at))}</span></div>
+    <div class="statgrid">
+      <div class="stat"><div class="k">Might (current)</div><div class="v gold">${fmt(p.might_current)}</div></div>
+      <div class="stat"><div class="k">Might (all-time)</div><div class="v">${fmt(p.might_all_time)}</div></div>
+      <div class="stat"><div class="k">Level</div><div class="v">${p.level}${p.legendary_level?" / "+p.legendary_level:""}</div></div>
+      <div class="stat"><div class="k">Honor</div><div class="v">${fmt(p.honor)} <span class="muted">/ max ${fmt(p.max_honor)}</span></div></div>
+      <div class="stat"><div class="k">Loot (current era)</div><div class="v">${fmt(p.loot_current)}</div></div>
+      <div class="stat"><div class="k">Loot (all-time)</div><div class="v">${fmt(p.loot_all_time)}</div></div>
+      <div class="stat"><div class="k">Glory</div><div class="v">${fmt(p.current_fame)}</div></div>
+      <div class="stat"><div class="k">${pc.banned?"Ban":"Peace mode"}</div><div class="v ${pc.banned?"war":(pc.until?"peace":"war")}">${pc.banned?"until "+dfull(pc.until):(pc.until?"until "+dfull(pc.until):"No")}</div></div>
+    </div>
+    ${spySection(id)}
+    <h3 class="sec">Alliance history <span class="muted" style="text-transform:none;letter-spacing:0">(tracker database — real dates)</span></h3>
+    ${updates.length ? `<div class="timeline">
+      ${updates.map((u,i)=>`<div class="tl-item">
+        <div class="when">${dfull(Date.parse(u.date))}</div>
+        <div>${u.new_alliance_id==null
+            ? `left ${aLink(u.old_alliance_id, u.old_alliance_name)}`
+            : `joined ${aLink(u.new_alliance_id, u.new_alliance_name)}${u.old_alliance_id!=null?` <span class="muted">(from ${esc(u.old_alliance_name||"")})</span>`:""}`}
+          <span class="muted"> · ${i===0 ? "for " + durBetween(u.date, new Date().toISOString()) + " so far" : "stayed " + durBetween(u.date, updates[i-1].date)}</span></div>
+      </div>`).join("")}
+      ${oldest && oldest.old_alliance_id!=null ? `<div class="tl-item"><div class="when">before tracking</div><div>${aLink(oldest.old_alliance_id, oldest.old_alliance_name)}</div></div>`:""}
+    </div>` : `<div class="empty">No alliance changes recorded by the tracker${p.alliance_id?" — they've been in this alliance since before tracking started":""}.</div>`}
+    ${nameHist.length?`<h3 class="sec">Name changes</h3><table><tr><th>Date</th><th>Old</th><th>New</th></tr>
+      ${nameHist.map(u=>`<tr><td class="mono muted">${dfull(Date.parse(u.date))}</td><td>${esc(u.old_player_name||"")}</td><td>${esc(u.new_player_name||"")}</td></tr>`).join("")}</table>`:""}
+    ${castles.length?`<h3 class="sec">Castles — realtime (${castles.length})</h3>
+    <table><tr><th>Name</th><th>Type</th><th>Kingdom</th><th>Coords</th><th>Keep</th><th>Wall</th><th>Gate</th><th>Tower</th><th>Moat</th></tr>
+    ${castles.map(cs=>`<tr>
+      <td>${esc(cs.name)||"—"}</td><td>${CASTLE_TYPES[cs.type]||"Type "+cs.type}</td>
+      <td>${KINGDOMS[cs.kingdomId]||"KID "+cs.kingdomId}</td>
+      <td class="mono">${cs.positionX}:${cs.positionY} <button class="copyb" onclick="copyText('${cs.positionX}:${cs.positionY}')">📋</button></td>
+      <td class="mono">${cs.keepLevel??"—"}</td><td class="mono">${cs.wallLevel??"—"}</td><td class="mono">${cs.gateLevel??"—"}</td><td class="mono">${cs.towerLevel??"—"}</td><td class="mono">${cs.moatLevel??"—"}</td>
+    </tr>`).join("")}</table>
+    <div class="hint" style="margin-top:6px">Defense levels are fetched live from the game — solid pre-attack intel.</div>`:""}`;
+  bindPlayerHead(id, name, p.alliance_name, p.might_current, pc.banned?null:pc.until);
+  if ($("alink")) $("alink").onclick = e=>{ e.preventDefault(); openAlliance(p.alliance_id); };
+  document.querySelectorAll(".palink").forEach(a=> a.onclick = e=>{ e.preventDefault(); openAlliance(a.dataset.aid); });
+  renderWatchlist();
+}
+
+/* ---------- alliance detail ---------- */
+let allianceCacheE = null;
+async function openAlliance(aid, rerenderOnly){
+  currentView = { type:"alliance", id:aid };
+  if (!rerenderOnly) $("main").innerHTML = `<div class="empty"><span class="spin"></span> Fetching alliance ${esc(aid)}…</div>`;
+  try {
+    if (MODE === "E") await openAllianceE(aid, rerenderOnly);
+    else await openAllianceT(aid);
+  } catch(e){
+    $("main").innerHTML = `<div class="err">Failed to load alliance ${esc(aid)}: ${esc(e.message)}</div>`;
+  }
+}
+function allianceMembersTable(members, aid, addAllIds){
+  // members: unified {id, name, nameKey (for open), rank, level, llevel, might, peaceUntil, E}
+  return `<h3 class="sec">Members — click a row to scout</h3>
+  <div class="etools">
+    <button class="btn small war" id="addAllEnemies">⚔ Add all ${members.length} members to enemy list</button>
+  </div>
+  <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th></th></tr>
+  ${members.map(m=>{
+    const since = sinceInAlliance(m.id, aid);
+    const isE = !!enemies()[m.id];
+    return `<tr class="click" data-open="${escA(m.nameKey)}">
+    <td>${pennant(m.E)}</td>
+    <td>${esc(m.name)} ${copyBtn(m.name)}</td>
+    <td class="muted">${m.rank??"—"}</td>
+    <td>${m.level??"—"}${m.llevel?"/"+m.llevel:""}</td>
+    <td class="mono">${fmt(m.might)}</td>
+    <td>${peaceBadge(m.peaceUntil, m.banned)}</td>
+    <td class="mono muted" data-since="${escA(m.id)}">${since?dshort(since):"just tracked"}</td>
+    <td><button class="btn small ${isE?"":"war"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
+    </tr>`;}).join("")}
+  </table>`;
+}
+let lastAllianceMembers = [];
+function addEnemyRow(id){
+  const m = lastAllianceMembers.find(x=>String(x.id)===String(id));
+  if (!m) return;
+  addEnemy(m.id, m.name, m.allianceName, m.might, m.peaceUntil, m.banned);
+  toast(m.name + " added to enemies");
+  openAlliance(currentView.id, true);
+}
+async function openAllianceE(aid, rerenderOnly){
+  let A;
+  if (rerenderOnly && allianceCacheE && String(allianceCacheE._aid) === String(aid)) A = allianceCacheE;
+  else { A = (await eCall("ain",{AID:Number(aid)})).A; A._aid = aid; allianceCacheE = A; }
+  const M = (A.M||[]).slice().sort((a,b)=>a.AR-b.AR||b.MP-a.MP);
+  for (const m of M) snap(m.OID, m.N, Number(aid), A.N, m.MP, m.L, m.LL, m.RPT>0?Date.now()+m.RPT*1000:null);
+  save();
+  lastAllianceMembers = M.map(m=>({ id:m.OID, name:m.N, nameKey:String(m.OID), rank:m.AR, level:m.L, llevel:m.LL, might:m.MP, peaceUntil:m.RPT>0?Date.now()+m.RPT*1000:null, E:m.E, allianceName:A.N }));
+  const totalMP = A.MP ?? M.reduce((s,m)=>s+(m.MP||0),0);
+  const desc = String(A.D||"").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,"");
+  $("main").innerHTML = `
+    <div class="detail-head"><h2>${esc(A.N||("#"+aid))}</h2> ${copyBtn(A.N||"")}
+      <span class="idtag">AID ${aid}</span>
+      <button class="btn small" id="reA">Refresh (record snapshot)</button></div>
+    <div class="statgrid">
+      <div class="stat"><div class="k">Members</div><div class="v">${M.length}${A.ML?" / "+A.ML:""}</div></div>
+      <div class="stat"><div class="k">Total might</div><div class="v gold">${fmt(totalMP)}</div></div>
+      <div class="stat"><div class="k">Glory</div><div class="v">${fmt(A.CF)}</div></div>
+    </div>
+    ${desc.trim()?`<div class="desc">${esc(desc)}</div>`:""}
+    ${allianceMembersTable(lastAllianceMembers, Number(aid))}
+    <div class="hint" style="margin-top:8px">"Since" = first observation by this app (live mode has no server history). Opening this page records a snapshot of every member.</div>`;
+  $("reA").onclick = () => openAlliance(aid);
+  $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil)); toast("All members added"); openAlliance(aid, true); };
+  $("main").querySelectorAll("[data-open]").forEach(r=> r.onclick = ()=> openPlayer(Number(r.dataset.open)));
+  renderWatchlist(); updateEnemyCount();
+}
+async function openAllianceT(aid){
+  const A = await tCall("/alliances/id/" + aid);
+  const M = (A.players||[]).slice().sort((a,b)=>(a.alliance_rank??99)-(b.alliance_rank??99)||Number(b.might_current)-Number(a.might_current));
+  for (const m of M){
+    const pc = classifyPeace(m.peace_disabled_at);
+    snap(m.player_id, m.player_name, aid, A.alliance_name, m.might_current, m.level, m.legendary_level, pc.banned?null:pc.until);
+  }
+  save();
+  lastAllianceMembers = M.map(m=>{
+    const pc = classifyPeace(m.peace_disabled_at);
+    return { id:m.player_id, name:m.player_name, nameKey:m.player_name, rank:m.alliance_rank, level:m.level, llevel:m.legendary_level, might:Number(m.might_current), peaceUntil:pc.until, banned:pc.banned, E:null, allianceName:A.alliance_name };
+  });
+  const totalMP = M.reduce((s,m)=>s+Number(m.might_current||0),0);
+  $("main").innerHTML = `
+    <div class="detail-head"><h2>${esc(A.alliance_name||("#"+aid))}</h2> ${copyBtn(A.alliance_name||"")}
+      <span class="idtag">AID ${aid}</span>
+      <button class="btn small" id="reA">Refresh</button></div>
+    <div class="statgrid">
+      <div class="stat"><div class="k">Members</div><div class="v">${M.length}</div></div>
+      <div class="stat"><div class="k">Total might</div><div class="v gold">${fmt(totalMP)}</div></div>
+      <div class="stat"><div class="k">In peace</div><div class="v peace">${lastAllianceMembers.filter(m=>m.peaceUntil&&!m.banned).length}</div></div>
+      <div class="stat"><div class="k">Banned</div><div class="v war">${lastAllianceMembers.filter(m=>m.banned).length}</div></div>
+    </div>
+    ${allianceMembersTable(lastAllianceMembers, aid)}
+    <div class="etools"><button class="btn small" id="loadSince">Load real join dates (1 request per member)</button></div>
+    <div class="hint" style="margin-top:8px">Peace = tracker's last scrape ("until" on hover). BANNED = protection longer than 63 days, which is how GGE flags banned accounts.</div>`;
+  $("reA").onclick = () => openAlliance(aid);
+  $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil,m.banned)); toast("All members added"); openAlliance(aid); };
+  $("main").querySelectorAll("[data-open]").forEach(r=> r.onclick = ()=> openPlayer(r.dataset.open));
+  $("loadSince").onclick = async () => {
+    const btn = $("loadSince"); btn.disabled = true;
+    let i = 0;
+    for (const m of lastAllianceMembers){
+      btn.textContent = `Loading join dates ${++i}/${lastAllianceMembers.length}…`;
+      try {
+        const ups = (await tCall(`/updates/players/${m.id}/alliances`)).updates || [];
+        ups.sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
+        let since = null;
+        if (ups.length && String(ups[0].new_alliance_id) === String(aid)) since = Date.parse(ups[0].date);
+        const cell = $("main").querySelector(`[data-since="${m.id}"]`);
+        if (cell) cell.textContent = since ? dshort(since) : "before tracking";
+        if (since){ // persist as a snapshot boundary so it survives
+          const r = prec(m.id); r.name = m.name;
+          if (!r.snaps.some(s=>String(s.AID)===String(aid) && s.t <= since+1000))
+            r.snaps.unshift({ t:since, AID:aid, AN:m.allianceName, MP:m.might, L:m.level, LL:m.llevel, PU:null });
+          r.snaps.sort((a,b)=>a.t-b.t);
+        }
+      } catch(e){}
+      await new Promise(r=>setTimeout(r,300));
+    }
+    save();
+    btn.textContent = "Join dates loaded ✓";
+  };
+  renderWatchlist(); updateEnemyCount();
+}
+
+/* ---------- watchlist ---------- */
+function renderWatchlist(){
+  const pref = srvKey() + ":";
+  const items = Object.entries(db.players).filter(([k,v]) => v.watch && k.startsWith(pref));
+  $("watchlist").innerHTML = items.length
+    ? items.map(([k,v])=>{
+        const last = v.snaps[v.snaps.length-1];
+        const openKey = MODE==="E" ? k.slice(pref.length) : v.name;
+        return `<div class="prow" data-open="${escA(openKey)}">
+          <div style="min-width:0"><div class="nm">${esc(v.name)}</div>
+          <div class="sub">${last?(last.AID?esc(last.AN||("#"+last.AID)):"no alliance")+" · "+fmt(last.MP)+" MP":""}</div></div>
+          <div class="right">${v.snaps.length}◈</div></div>`;
+      }).join("")
+    : `<div class="hint">No watched players here. Open a player and hit ☆ Watch.</div>`;
+  $("watchlist").querySelectorAll("[data-open]").forEach(r=> r.onclick = ()=> openPlayer(r.dataset.open));
+}
+$("refreshWatch").onclick = async () => {
+  const pref = srvKey() + ":";
+  const items = Object.entries(db.players).filter(([k,v]) => v.watch && k.startsWith(pref));
+  if (!items.length) return;
+  const btn = $("refreshWatch"); btn.disabled = true;
+  let i = 0;
+  for (const [k,v] of items){
+    btn.textContent = `Refreshing ${++i}/${items.length}…`;
+    try {
+      if (MODE === "E"){
+        const o = (await eCall("gdi",{PID:Number(k.slice(pref.length))})).O;
+        snap(o.OID,o.N,o.AID,o.AN,o.MP,o.L,o.LL,o.RPT>0?Date.now()+o.RPT*1000:null);
+      } else {
+        const p = await tCall("/players/" + encodeURIComponent(v.name));
+        const pu = p.peace_disabled_at ? Date.parse(p.peace_disabled_at) : null;
+        snap(p.player_id,p.player_name,p.alliance_id,p.alliance_name,p.might_current,p.level,p.legendary_level,pu&&pu>Date.now()?pu:null);
+      }
+    } catch(e){}
+    await new Promise(r=>setTimeout(r,350));
+  }
+  save();
+  btn.disabled = false; btn.textContent = "Refresh all (record snapshot)";
+  renderWatchlist();
+};
+
+/* ---------- export / import ---------- */
+$("exportBtn").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(db)],{type:"application/json"}));
+  a.download = "gge-intel-data.json"; a.click();
+};
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => {
+    const inc = JSON.parse(t);
+    for (const [k,v] of Object.entries(inc.players||{})){
+      if (!db.players[k]) db.players[k] = v;
+      else {
+        const seen = new Set(db.players[k].snaps.map(s=>s.t));
+        db.players[k].snaps.push(...(v.snaps||[]).filter(s=>!seen.has(s.t)));
+        db.players[k].snaps.sort((a,b)=>a.t-b.t);
+        const seenSpy = new Set((db.players[k].spy||[]).map(s=>s.t));
+        (db.players[k].spy||(db.players[k].spy=[])).push(...(v.spy||[]).filter(s=>!seenSpy.has(s.t)));
+        db.players[k].watch = db.players[k].watch || v.watch;
+      }
+    }
+    for (const [sk,list] of Object.entries(inc.enemies||{})){
+      db.enemies[sk] = db.enemies[sk] || {};
+      for (const [id,en] of Object.entries(list)) if (!db.enemies[sk][id]) db.enemies[sk][id] = en;
+    }
+    save(); renderWatchlist(); updateEnemyCount(); toast("Import merged");
+  }).catch(()=>toast("Invalid file"));
+};
+
+/* ---------- wiring ---------- */
+$("goBtn").onclick = doSearch;
+$("q").addEventListener("keydown", e=>{ if (e.key==="Enter") doSearch(); });
+$("goAlliance").onclick = findAlliance;
+$("qa").addEventListener("keydown", e=>{ if (e.key==="Enter") findAlliance(); });
+$("openEnemies").onclick = openEnemies;
+$("serverSel").addEventListener("change", () => {
+  localStorage.setItem(LSKEY + ".server" + MODE, $("serverSel").value);
+  renderWatchlist(); updateEnemyCount();
+});
+window.copyText = copyText; window.toggleAttacked = toggleAttacked; window.setNotes = setNotes;
+window.askSpy = askSpy; window.showSpy = showSpy; window.delSpy = delSpy;
+window.removeEnemy = removeEnemy; window.openPlayer = openPlayer; window.addEnemyRow = addEnemyRow;
+setMode(MODE);
+</script>
+</body>
+</html>
