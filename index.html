@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GGE Intel — Player &amp; Alliance Tracker</title>
+<title>Visvy Intel — Player &amp; Alliance Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
   --ink:#0f1216; --panel:#171c23; --panel2:#1d232c; --line:#2a323d;
-  --parchment:#e8e1d2; --dim:#8a94a3; --gold:#d4a73c; --peace:#5fa96b; --war:#c75548;
+  --parchment:#e8e1d2; --dim:#8a94a3; --gold:#d4a73c; --peace:#5fa96b; --war:#c75548; --vet:#6fb3e8;
   --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif; --disp:'Cinzel',serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -77,10 +78,16 @@ select:focus,input:focus,textarea:focus{outline:1px solid var(--gold)}
 
 h3.sec{font-family:var(--disp);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:22px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{color:var(--dim);text-align:left;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.07em;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);text-align:left;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.07em;padding:6px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--ink);z-index:1}
 td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:nth-child(even) td{background:rgba(255,255,255,.015)}
 tr.click{cursor:pointer} tr.click:hover td{background:var(--panel2)}
 tr.done td{opacity:.45}
+.vet{font-weight:700;color:var(--vet) !important;background:rgba(111,179,232,.10);padding:1px 7px;border-radius:10px;border:1px solid rgba(111,179,232,.4);text-decoration:none}
+.vet:hover{background:rgba(111,179,232,.2)}
+.rowlist::-webkit-scrollbar,.desc::-webkit-scrollbar{width:8px}
+.rowlist::-webkit-scrollbar-thumb,.desc::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+.prow,.btn{transition:border-color .12s ease, background .12s ease}
 .mono{font-family:var(--mono)}
 .muted{color:var(--dim)}
 
@@ -113,7 +120,7 @@ input[type=checkbox].big{width:17px;height:17px;accent-color:var(--war);cursor:p
 <body>
 
 <header>
-  <h1>GGE <span>INTEL</span></h1>
+  <h1>VISVY <span>INTEL</span></h1>
   <div class="srctabs">
     <button id="tabE">LIVE (empire-api)</button>
     <button id="tabT">TRACKER (gge-tracker)</button>
@@ -283,13 +290,7 @@ function tCall(path){
     .then(r=>r.json())
     .then(j=>{ if (j && j.error) throw new Error(j.error); return j; });
 }
-const allianceNameCache = {}; // per srvKey: {aid: name}
-async function tAllianceName(aid){
-  const c = allianceNameCache[srvKey()] || (allianceNameCache[srvKey()] = {});
-  if (c[aid]) return c[aid];
-  try { const a = await tCall("/alliances/id/" + aid); c[aid] = a.alliance_name; return c[aid]; }
-  catch(e){ return "#" + aid; }
-}
+const allianceNameCache = {}; // reserved
 /* cached per-player alliance history (tracker mode), 6h TTL */
 async function tPlayerHist(id, force){
   const r = prec(id);
@@ -513,6 +514,23 @@ function toggleAttacked(id, on){
 }
 function setNotes(id, v){ const en = enemies()[id]; if (en){ en.notes = v; save(); } }
 let enemyFilter = "all";
+const ROASTS = [
+  "Look at them huddling in peace mode — doves by choice, targets by destiny.",
+  "Their walls are level 8. Their courage is level 1.",
+  "A whole alliance and not one of them can hold a castle. Adorable.",
+  "They farm resources all day just to deliver them to you. Loyal workers, really.",
+  "Peace mode again? At this point their shield has more playtime than they do.",
+  "Their might graph goes down faster than their morale after your first wave.",
+  "They call it 'strategic relocation'. Everyone else calls it running away.",
+  "Half of them changed alliances three times this month. Rats know when the ship sinks.",
+  "Their leader recruits in world chat. You recruit their loot into your keep.",
+  "Legendary level 950 and still can't build a moat. Impressive, honestly.",
+  "They log in, see your banner on the horizon, and suddenly remember they have homework.",
+  "Their spy reports on you are blurry. Yours are in 4K.",
+  "Ruins in the making. You're just speeding up the archaeology.",
+  "They stack honor like it will protect them. It won't.",
+  "Every name on this list is a future 'castle burning' animation."
+];
 function openEnemies(){
   currentView = { type:"enemies", id:null };
   const list = Object.values(enemies()).sort((a,b)=> a.attacked - b.attacked || (b.might||0)-(a.might||0));
@@ -523,6 +541,9 @@ function openEnemies(){
       <h2>⚔ Enemy list</h2>
       <span class="idtag">${$("serverSel").value} · ${list.length} targets · ${done} attacked</span>
     </div>
+    ${list.length ? `<div class="hint" style="font-style:italic;margin:2px 0 6px;color:var(--gold)">
+      "<span id="roastTxt">${esc(ROASTS[Math.floor(Math.random()*ROASTS.length)])}</span>"
+      <button class="copyb" id="reroast" title="another one">🎲</button></div>` : ""}
     <div class="etools">
       <select id="efilter">
         <option value="all"${enemyFilter==="all"?" selected":""}>All</option>
@@ -553,6 +574,7 @@ function openEnemies(){
     </table>` : `<div class="empty">No targets${enemyFilter!=="all"?" matching the filter":""}. Open an alliance and add members, or add players from their profile.</div>`}
     <div class="hint" style="margin-top:8px">Check ✓ once you've attacked a target (hover shows when). Peace status is from the last refresh.</div>`;
   $("efilter").onchange = e => { enemyFilter = e.target.value; openEnemies(); };
+  if ($("reroast")) $("reroast").onclick = () => { $("roastTxt").textContent = ROASTS[Math.floor(Math.random()*ROASTS.length)]; };
   $("eCsv").onclick = exportEnemiesCsv;
   $("eCopyAll").onclick = () => copyText(list.map(e=>e.name).join("\n"));
   $("eResetAtt").onclick = () => { for (const e of list){ e.attacked=false; e.attackedAt=null; } save(); openEnemies(); };
@@ -788,15 +810,16 @@ function pastAlliancesFromSnaps(id, currentAid, max=3){
   return markLongest(out, currentConfirmed ? (durs[currentAid]||0) : Infinity);
 }
 const pastCellHtml = list => list.length
-  ? list.map(a=>`<a href="#" ${a.bold?`style="font-weight:700;color:var(--gold)" title="spent longer here (${durMs(a.dur)||"?"}) than in the current alliance"`:""} onclick="event.preventDefault();event.stopPropagation();openAlliance('${escA(a.id)}')">${esc(a.name||("#"+a.id))}</a>`).join('<span class="muted"> · </span>')
+  ? list.map(a=>`<a href="#" ${a.bold?`class="vet" title="spent longer here (${durMs(a.dur)||"?"}) than in the current alliance"`:""} onclick="event.preventDefault();event.stopPropagation();openAlliance('${escA(a.id)}')">${esc(a.name||("#"+a.id))}</a>`).join('<span class="muted"> · </span>')
   : '<span class="muted">—</span>';
-function allianceMembersTable(members, aid, addAllIds){
+const isMockedAlliance = name => /horde\s+of\s+enemie/i.test(String(name||""));
+function allianceMembersTable(members, aid, mock){
   // members: unified {id, name, nameKey (for open), rank, level, llevel, might, peaceUntil, E}
   return `<h3 class="sec">Members — click a row to scout</h3>
   <div class="etools">
-    <button class="btn small war" id="addAllEnemies">⚔ Add all ${members.length} members to enemy list</button>
+    <button class="btn small war" id="addAllEnemies" title="Add every member below to your enemy list">⚔ Add all ${members.length} members to enemy list</button>
   </div>
-  <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th>Past alliances (last 3)</th><th></th></tr>
+  <table><tr><th></th><th>Name</th><th>Rank</th><th>Level</th><th>Might</th><th>Peace</th><th>In alliance since</th><th>Past alliances (last 3)</th>${mock?`<th>Certification</th>`:""}<th></th></tr>
   ${members.map(m=>{
     const r = db.players[pkey(m.id)];
     const ups = (MODE==="T" && r?.hist) ? r.hist.ups : null;
@@ -813,9 +836,11 @@ function allianceMembersTable(members, aid, addAllIds){
     <td>${peaceBadge(m.peaceUntil, m.banned)}</td>
     <td class="mono muted" data-since="${escA(m.id)}">${sinceTxt}</td>
     <td style="font-size:12px" data-past="${escA(m.id)}">${pastCellHtml(past)}</td>
-    <td><button class="btn small ${isE?"":"war"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
+    ${mock?`<td><span class="badge war" title="certification issued by Visvy Intel, 100% peer reviewed">🤖 certified bot user</span></td>`:""}
+    <td><button class="btn small ${isE?"":"war"}" title="${isE?"already on enemy list":"add to enemy list"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
     </tr>`;}).join("")}
-  </table>`;
+  </table>
+  <div class="hint" style="margin-top:6px"><span class="vet" style="font-size:11px">Highlighted</span> past alliance = the player spent more time there than in this one — likely stronger loyalty elsewhere.</div>`;
 }
 let lastAllianceMembers = [];
 function addEnemyRow(id){
@@ -835,8 +860,10 @@ async function openAllianceE(aid, rerenderOnly){
   lastAllianceMembers = M.map(m=>({ id:m.OID, name:m.N, nameKey:String(m.OID), rank:m.AR, level:m.L, llevel:m.LL, might:m.MP, peaceUntil:m.RPT>0?Date.now()+m.RPT*1000:null, E:m.E, allianceName:A.N }));
   const totalMP = A.MP ?? M.reduce((s,m)=>s+(m.MP||0),0);
   const desc = String(A.D||"").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,"");
+  const mock = isMockedAlliance(A.N);
   $("main").innerHTML = `
     <div class="detail-head"><h2>${esc(A.N||("#"+aid))}</h2> ${copyBtn(A.N||"")}
+      ${mock?'<span class="badge war" style="font-size:13px">a.k.a. Horde of Bots 🤖</span>':""}
       <span class="idtag">AID ${aid}</span>
       <button class="btn small" id="reA">Refresh (record snapshot)</button></div>
     <div class="statgrid">
@@ -845,7 +872,7 @@ async function openAllianceE(aid, rerenderOnly){
       <div class="stat"><div class="k">Glory</div><div class="v">${fmt(A.CF)}</div></div>
     </div>
     ${desc.trim()?`<div class="desc">${esc(desc)}</div>`:""}
-    ${allianceMembersTable(lastAllianceMembers, Number(aid))}
+    ${allianceMembersTable(lastAllianceMembers, Number(aid), mock)}
     <div class="hint" style="margin-top:8px">"Since" = first observation by this app (live mode has no server history). Opening this page records a snapshot of every member.</div>`;
   $("reA").onclick = () => openAlliance(aid);
   $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil)); toast("All members added"); openAlliance(aid, true); };
@@ -865,8 +892,10 @@ async function openAllianceT(aid){
     return { id:m.player_id, name:m.player_name, nameKey:m.player_name, rank:m.alliance_rank, level:m.level, llevel:m.legendary_level, might:Number(m.might_current), peaceUntil:pc.until, banned:pc.banned, E:null, allianceName:A.alliance_name };
   });
   const totalMP = M.reduce((s,m)=>s+Number(m.might_current||0),0);
+  const mock = isMockedAlliance(A.alliance_name);
   $("main").innerHTML = `
     <div class="detail-head"><h2>${esc(A.alliance_name||("#"+aid))}</h2> ${copyBtn(A.alliance_name||"")}
+      ${mock?'<span class="badge war" style="font-size:13px">a.k.a. Horde of Bots 🤖</span>':""}
       <span class="idtag">AID ${aid}</span>
       <button class="btn small" id="reA">Refresh</button></div>
     <div class="statgrid">
@@ -875,7 +904,7 @@ async function openAllianceT(aid){
       <div class="stat"><div class="k">In peace</div><div class="v peace">${lastAllianceMembers.filter(m=>m.peaceUntil&&!m.banned).length}</div></div>
       <div class="stat"><div class="k">Banned</div><div class="v war">${lastAllianceMembers.filter(m=>m.banned).length}</div></div>
     </div>
-    ${allianceMembersTable(lastAllianceMembers, aid)}
+    ${allianceMembersTable(lastAllianceMembers, aid, mock)}
     <div class="hint" style="margin-top:8px"><span id="histStatus"></span> Peace = tracker's last scrape ("until" on hover). BANNED = protection longer than 63 days, which is how GGE flags banned accounts.</div>`;
   $("reA").onclick = () => openAlliance(aid);
   $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil,m.banned)); toast("All members added"); openAlliance(aid); };
