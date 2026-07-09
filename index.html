@@ -210,7 +210,7 @@ input[type=checkbox].big{width:20px;height:20px;accent-color:var(--war);cursor:p
 
 <script>
 "use strict";
-const LSKEY = "ggeIntel.v3";
+const LSKEY = "ggeIntel.v4";
 const DEF_API = "https://api.gge-tracker.com/api/v1";
 const DEF_SERVER = "INT2"; // World 2
 const $ = id => document.getElementById(id);
@@ -371,10 +371,10 @@ async function loadServers(){
     const arr = Array.isArray(list) ? list : [];
     if (!arr.length) throw new Error("no servers returned");
     const gge = arr.filter(s=>!String(s).startsWith("E4K")), e4k = arr.filter(s=>String(s).startsWith("E4K"));
-    const label = s => s.replace(/^INT/,"World ").replace(/^E4K/,"E4K ");
+    const label = s => s.replace(/^INT/,"WORLD").replace(/^E4K/,"E4K ");
     sel.innerHTML = `<optgroup label="Goodgame Empire">${gge.map(s=>`<option value="${s}">${esc(label(s))}</option>`).join("")}</optgroup>`
                   + (e4k.length?`<optgroup label="E4K">${e4k.map(s=>`<option value="${s}">${esc(label(s))}</option>`).join("")}</optgroup>`:"");
-    const saved = localStorage.getItem(LSKEY + ".serverT");
+    const saved = localStorage.getItem(LSKEY + ".serverT2");
     const want = (saved && arr.includes(saved)) ? saved : (arr.includes(DEF_SERVER) ? DEF_SERVER : arr[0]);
     sel.value = want;
     $("apiDot").className = "dot on";
@@ -385,7 +385,7 @@ async function loadServers(){
   renderWatchlist(); updateEnemyCount(); loadTopAlliances();
 }
 $("serverSel").addEventListener("change", () => {
-  localStorage.setItem(LSKEY + ".serverT", $("serverSel").value);
+  localStorage.setItem(LSKEY + ".serverT2", $("serverSel").value);
   renderWatchlist(); updateEnemyCount(); loadTopAlliances();
 });
 $("apiUrl").value = API;
