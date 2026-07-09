@@ -119,6 +119,10 @@ tr.done td{opacity:.4}
 #lightbox img{max-width:96vw;max-height:96vh;border-radius:10px;animation:fadeUp .2s ease}
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--gold);color:#141005;font-weight:700;padding:11px 20px;border-radius:24px;display:none;z-index:60;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.5);animation:fadeUp .2s ease}
 .notesbox{width:100%;min-width:170px;min-height:40px;resize:vertical;font-size:13px}
+.moves{display:flex;flex-direction:column;gap:6px}
+.move{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.moveA{color:var(--vet);font-weight:600;background:rgba(95,178,240,.08);padding:1px 8px;border-radius:9px;border:1px solid rgba(95,178,240,.3)}
+.moveA:hover{background:rgba(95,178,240,.18);text-decoration:none}
 .etools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center}
 input[type=checkbox].big{width:20px;height:20px;accent-color:var(--war);cursor:pointer}
 
@@ -176,6 +180,12 @@ input[type=checkbox].big{width:20px;height:20px;accent-color:var(--war);cursor:p
         <button class="btn" id="goBtn">Scout</button>
       </div>
       <div id="searchStatus"></div>
+    </div>
+
+    <div>
+      <div class="seclabel">Your username</div>
+      <input id="myName" type="text" placeholder="For distance to targets" style="width:100%" />
+      <div class="hint" style="margin-top:6px">Exact in-game name. Alliance tables will show each member's distance from your main castle.</div>
     </div>
 
     <div>
@@ -722,7 +732,12 @@ function addEnemyRow(id){
   if (!m) return;
   addEnemy(m.id, m.name, m.allianceName, m.might, m.peaceUntil, m.banned);
   toast(m.name + " added to enemies");
-  renderAllianceView();
+  // update buttons in place so open expansions stay open
+  $("main").querySelectorAll("button").forEach(b=>{
+    if (b.getAttribute("onclick")?.includes(`addEnemyRow(${JSON.stringify(String(id))})`)){
+      b.textContent = "Added ✓"; b.classList.remove("war");
+    }
+  });
 }
 async function openAlliance(aid, rerenderOnly){
   currentView = { type:"alliance", id:aid };
@@ -730,8 +745,12 @@ async function openAlliance(aid, rerenderOnly){
   if (rerenderOnly && lastAllianceMeta && String(lastAllianceMeta.aid) === String(aid)) return renderAllianceView();
   setMain(`<div class="empty"><span class="spin"></span> Fetching alliance ${esc(aid)}…</div>`);
   let A;
-  try { A = await tCall("/alliances/id/" + aid); }
-  catch(e){ setMain(`<div class="err">Failed to load alliance ${esc(aid)}: ${esc(e.message)}</div>`); return; }
+  try { A = await tCall("/alliances/id/" + aid + (MYNAME ? "?playerNameForDistance=" + encodeURIComponent(MYNAME) : "")); }
+  catch(e){
+    if (MYNAME && /player name/i.test(e.message)){ // bad username — retry without
+      try { A = await tCall("/alliances/id/" + aid); toast("Couldn't find '" + MYNAME + "' for distance"); } catch(e2){ setMain(`<div class="err">Failed to load alliance ${esc(aid)}: ${esc(e2.message)}</div>`); return; }
+    } else { setMain(`<div class="err">Failed to load alliance ${esc(aid)}: ${esc(e.message)}</div>`); return; }
+  }
   const M = A.players || [];
   for (const m of M){
     const pc = classifyPeace(m.peace_disabled_at);
@@ -740,7 +759,7 @@ async function openAlliance(aid, rerenderOnly){
   save();
   lastAllianceMembers = M.map(m=>{
     const pc = classifyPeace(m.peace_disabled_at);
-    return { id:m.player_id, name:m.player_name, might:Number(m.might_current), peaceUntil:pc.until, banned:pc.banned, allianceName:A.alliance_name, since:undefined, past:null };
+    return { id:m.player_id, name:m.player_name, might:Number(m.might_current), honor:Number(m.honor), dist:(m.calculated_distance==null?null:Number(m.calculated_distance)), peaceUntil:pc.until, banned:pc.banned, allianceName:A.alliance_name, since:undefined, past:null };
   });
   // prefill from cached history
   for (const m of lastAllianceMembers){
@@ -759,12 +778,12 @@ async function openAlliance(aid, rerenderOnly){
 }
 function renderAllianceView(){
   const { aid, name, mock, totalMP } = lastAllianceMeta;
-  const getters = { name:m=>m.name?.toLowerCase(), might:m=>m.might, peace:m=>m.banned?-1:(m.peaceUntil||0), since:m=>m.since===undefined?Infinity:(m.since??0) };
+  const getters = { name:m=>m.name?.toLowerCase(), might:m=>m.might, honor:m=>m.honor??-Infinity, peace:m=>m.banned?-1:(m.peaceUntil||0), dist:m=>m.dist??Infinity };
   const sorted = sortBy(lastAllianceMembers, memberSort.key, memberSort.dir, getters);
+  const hasDist = !!MYNAME && lastAllianceMembers.some(m=>m.dist!=null);
   const th = (label, key) => key ? `<th class="sortable" data-msort="${key}">${label} ${sortArrow(memberSort, key)}</th>` : `<th>${label}</th>`;
   setMain(`
-    <div class="detail-head"><h2>${esc(name||("#"+aid))}</h2> ${copyBtn(name||"")}
-      ${mock?'<span class="badge war" style="font-size:13px">a.k.a. Horde of Bots 🤖</span>':""}
+    <div class="detail-head"><h2>${esc(name||("#"+aid))}${mock?' <span title="Horde of Bots">🤖</span>':""}</h2> ${copyBtn(name||"")}
       <span class="idtag">AID ${aid}</span>
       <button class="btn small" id="reA">Refresh</button></div>
     <div class="statgrid">
@@ -773,35 +792,91 @@ function renderAllianceView(){
       <div class="stat"><div class="k">In peace</div><div class="v peace">${lastAllianceMembers.filter(m=>m.peaceUntil&&!m.banned).length}</div></div>
       <div class="stat"><div class="k">Banned</div><div class="v war">${lastAllianceMembers.filter(m=>m.banned).length}</div></div>
     </div>
-    <h3 class="sec">Members — click a row to scout</h3>
+    <h3 class="sec">Members — click a row to expand</h3>
     <div class="etools">
-      <button class="btn small war" id="addAllEnemies" title="Add every member below to your enemy list">⚔ Add all ${lastAllianceMembers.length} members to enemy list</button>
+      <button class="btn small war" id="addAllEnemies" title="Add every member below to your enemy list">Add all ${lastAllianceMembers.length} members to enemy list</button>
       <span class="hint" id="histStatus"></span>
     </div>
-    <div class="tblwrap"><table><tr>${th("Name","name")}${th("Might","might")}${th("Peace","peace")}${th("In alliance since","since")}${th("Past alliances (last 3)")}${mock?th("Certification"):""}${th("")}</tr>
-    ${sorted.map((m,i)=>{
+    <div class="tblwrap"><table id="memtable"><tr>${th("Name","name")}${th("Might","might")}${th("Honor","honor")}${hasDist?th("Distance","dist"):""}${th("Peace","peace")}${th("Past alliances (last 3)")}${th("")}</tr>
+    ${sorted.map(m=>{
       const isE = !!enemies()[m.id];
-      const sinceTxt = m.since===undefined ? "…" : (m.since ? dshort(m.since) : "before tracking");
-      return `<tr class="click" data-open="${escA(m.name)}">
+      return `<tr class="click" data-mid="${escA(m.id)}">
       <td>${esc(m.name)} ${copyBtn(m.name)}</td>
       <td class="mono">${fmt(m.might)}</td>
+      <td class="mono">${fmt(m.honor)}</td>
+      ${hasDist?`<td class="mono" title="from ${escA(MYNAME)}'s main castle">${m.dist==null?"—":m.dist}</td>`:""}
       <td>${peaceBadge(m.peaceUntil, m.banned)}</td>
-      <td class="mono muted" data-since="${escA(m.id)}">${sinceTxt}</td>
       <td style="font-size:12px" data-past="${escA(m.id)}">${m.past?pastCellHtml(m.past):'<span class="muted">…</span>'}</td>
-      ${mock?`<td><span class="badge war" title="certification issued by TITANS Intel, 100% peer reviewed">🤖 certified bot user</span></td>`:""}
-      <td><button class="btn small ${isE?"":"war"}" title="${isE?"already on enemy list":"add to enemy list"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"⚔ ✓":"⚔"}</button></td>
+      <td><button class="btn small ${isE?"":"war"}" onclick='event.stopPropagation();addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"Added ✓":"Add to enemies"}</button></td>
       </tr>`;}).join("")}
     </table></div>
     <div class="hint" style="margin-top:6px"><span class="vet" style="font-size:11px">Highlighted</span> past alliance = the player spent more time there than in this one. Click column headers to sort. BANNED = protection over 63 days.</div>`);
   $("reA").onclick = () => { lastAllianceMeta = null; openAlliance(aid); };
   $("addAllEnemies").onclick = () => { lastAllianceMembers.forEach(m=>addEnemy(m.id,m.name,m.allianceName,m.might,m.peaceUntil,m.banned)); toast("All members added"); renderAllianceView(); };
-  $("main").querySelectorAll("[data-open]").forEach(r=> r.onclick = ()=> openPlayer(r.dataset.open));
+  $("main").querySelectorAll("[data-mid]").forEach(r=> r.onclick = ()=> toggleExpand(r, r.dataset.mid));
   $("main").querySelectorAll("[data-msort]").forEach(h => h.onclick = () => {
     const k = h.dataset.msort;
     memberSort = { key:k, dir: memberSort.key===k ? -memberSort.dir : (k==="name"?1:-1) };
     renderAllianceView();
   });
   renderWatchlist(); updateEnemyCount();
+}
+
+/* ---------- inline member expansion ---------- */
+async function toggleExpand(row, mid){
+  const table = $("memtable");
+  const existing = table.querySelector(`tr.expandrow[data-for="${mid}"]`);
+  table.querySelectorAll("tr.expandrow").forEach(r=>r.remove()); // collapse others
+  if (existing) return; // was open -> now closed
+  const m = lastAllianceMembers.find(x=>String(x.id)===String(mid));
+  if (!m) return;
+  const cols = row.children.length;
+  const ex = document.createElement("tr");
+  ex.className = "expandrow";
+  ex.dataset.for = mid;
+  ex.innerHTML = `<td colspan="${cols}" style="background:var(--panel2)"><div class="hint"><span class="spin"></span> Loading ${esc(m.name)}…</div></td>`;
+  row.after(ex);
+  let p = null;
+  try { p = await tCall("/players/" + encodeURIComponent(m.name)); } catch(e){}
+  let ups = [];
+  try { ups = await tPlayerHist(m.id); } catch(e){}
+  if (!ex.isConnected) return; // collapsed meanwhile
+  const since = sinceFromUps(ups, lastAllianceMeta.aid);
+  const mini = (k,v,cls) => `<div class="stat"><div class="k">${k}</div><div class="v ${cls||""}" style="font-size:14px">${v}</div></div>`;
+  const aTag = (id, nm) => id==null
+    ? '<span class="muted">no alliance</span>'
+    : `<a href="#" class="moveA" onclick="event.preventDefault();openAlliance('${escA(id)}')">${esc(nm||("#"+id))}</a>`;
+  const isE = !!enemies()[m.id];
+  ex.querySelector("td").innerHTML = `
+    <div style="padding:6px 2px;animation:fadeUp .2s ease">
+      <div class="statgrid" style="margin:8px 0">
+        ${mini("Might (all-time)", fmt(p?.might_all_time))}
+        ${mini("Honor", fmt(p?.honor) + ' <span class="muted">/ ' + fmt(p?.max_honor) + '</span>')}
+        ${mini("Loot (era)", fmt(p?.loot_current))}
+        ${mini("Loot (all-time)", fmt(p?.loot_all_time))}
+        ${mini("Glory", fmt(p?.current_fame))}
+        ${mini("Level", p ? p.level + (p.legendary_level?" / "+p.legendary_level:"") : "—")}
+        ${mini("Member since", since ? dshort(since) : "before tracking")}
+        ${MYNAME && m.dist!=null ? mini("Distance from you", m.dist) : ""}
+        ${mini("Peace / ban", m.banned ? "banned until "+dfull(m.peaceUntil) : (m.peaceUntil ? "until "+dfull(m.peaceUntil) : "No"), m.banned?"war":(m.peaceUntil?"peace":"war"))}
+      </div>
+      ${ups.length ? `<div style="margin:10px 0 12px">
+        <div class="seclabel" style="margin-bottom:6px">Recent moves</div>
+        <div class="moves">${ups.slice(0,4).map(u=>`
+          <div class="move">
+            <span class="mono muted" style="min-width:82px;display:inline-block">${dshort(Date.parse(u.date))}</span>
+            ${u.new_alliance_id==null
+              ? `<span class="badge war" style="font-size:11px">left</span> ${aTag(u.old_alliance_id, u.old_alliance_name)}`
+              : `<span class="badge peace" style="font-size:11px">joined</span> ${aTag(u.new_alliance_id, u.new_alliance_name)}${u.old_alliance_id!=null?` <span class="muted">from</span> ${aTag(u.old_alliance_id, u.old_alliance_name)}`:""}`}
+          </div>`).join("")}
+        </div>
+      </div>` : ""}
+      <div class="etools" style="margin:4px 0 2px">
+        <button class="btn small ${isE?"":"war"}" onclick='addEnemyRow(${JSON.stringify(String(m.id))})'>${isE?"Added ✓":"Add to enemies"}</button>
+        <button class="btn small" onclick="copyText('${escA(m.name)}')">Copy name</button>
+        <button class="btn small" onclick="openPlayer('${escA(m.name)}')">Full profile →</button>
+      </div>
+    </div>`;
 }
 async function autoLoadHistory(aid){
   const myMeta = lastAllianceMeta;
@@ -814,8 +889,6 @@ async function autoLoadHistory(aid){
       const ups = await tPlayerHist(m.id);
       m.since = sinceFromUps(ups, aid);
       m.past = pastFromUps(ups, aid);
-      const cell = $("main").querySelector(`[data-since="${m.id}"]`);
-      if (cell) cell.textContent = m.since ? dshort(m.since) : "before tracking";
       const pcell = $("main").querySelector(`[data-past="${m.id}"]`);
       if (pcell) pcell.innerHTML = pastCellHtml(m.past);
       if (m.since){
@@ -899,6 +972,14 @@ $("importFile").onchange = e => {
 };
 
 /* ---------- wiring ---------- */
+let MYNAME = localStorage.getItem(LSKEY + ".myName") || "";
+$("myName").value = MYNAME;
+$("myName").addEventListener("change", () => {
+  MYNAME = $("myName").value.trim();
+  localStorage.setItem(LSKEY + ".myName", MYNAME);
+  toast(MYNAME ? "Distances will be measured from " + MYNAME : "Username cleared");
+  if (currentView.type === "alliance"){ const aid = currentView.id; lastAllianceMeta = null; openAlliance(aid, true); }
+});
 $("goBtn").onclick = doSearch;
 $("q").addEventListener("keydown", e=>{ if (e.key==="Enter") doSearch(); });
 $("goAlliance").onclick = findAlliance;
