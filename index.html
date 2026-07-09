@@ -165,6 +165,11 @@ input[type=checkbox].big{width:20px;height:20px;accent-color:var(--war);cursor:p
     </div>
 
     <div>
+      <div class="seclabel">Top 5 alliances</div>
+      <div class="rowlist" id="topAlliances"><div class="hint">Loading…</div></div>
+    </div>
+
+    <div>
       <div class="seclabel">Player search</div>
       <div class="searchrow">
         <input id="q" type="text" placeholder="Exact player name" />
@@ -377,11 +382,11 @@ async function loadServers(){
     $("apiDot").className = "dot off";
     setMain(`<div class="err">Could not reach ${esc(API)}: ${esc(e.message||"network error")}. Check your connection or browser extensions (F12 console).</div>`);
   }
-  renderWatchlist(); updateEnemyCount();
+  renderWatchlist(); updateEnemyCount(); loadTopAlliances();
 }
 $("serverSel").addEventListener("change", () => {
   localStorage.setItem(LSKEY + ".serverT", $("serverSel").value);
-  renderWatchlist(); updateEnemyCount();
+  renderWatchlist(); updateEnemyCount(); loadTopAlliances();
 });
 $("apiUrl").value = API;
 $("apiUrl").addEventListener("change", () => {
@@ -389,6 +394,27 @@ $("apiUrl").addEventListener("change", () => {
   localStorage.setItem(LSKEY + ".apiT", API);
   loadServers();
 });
+
+/* ---------- top alliances ---------- */
+const MEDALS = ["🥇","🥈","🥉","4","5"];
+async function loadTopAlliances(){
+  const el = $("topAlliances");
+  el.innerHTML = `<div class="hint"><span class="spin"></span> Loading…</div>`;
+  try {
+    const r = await tCall("/alliances?page=1&orderBy=might_current&orderType=DESC");
+    const top = (r.alliances||[]).slice(0,5);
+    el.innerHTML = top.length ? top.map((a,i)=>`
+      <div class="prow" style="animation-delay:${i*30}ms" data-aid="${a.alliance_id}">
+        <span style="width:22px;text-align:center;flex:none;font-size:${i<3?"15px":"13px"};color:var(--dim)">${MEDALS[i]}</span>
+        <div style="min-width:0"><div class="nm">${esc(a.alliance_name)}</div>
+        <div class="sub">${a.player_count} members</div></div>
+        <div class="right">${fmt(a.might_current)} MP</div>
+      </div>`).join("") : `<div class="hint">No data for this server.</div>`;
+    el.querySelectorAll("[data-aid]").forEach(x => x.onclick = () => openAlliance(x.dataset.aid));
+  } catch(e){
+    el.innerHTML = `<div class="hint">Couldn't load top alliances.</div>`;
+  }
+}
 
 /* ---------- alliance search ---------- */
 async function findAlliance(){
